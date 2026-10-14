@@ -36,6 +36,9 @@ plugin-design/sessions-decompressed/
 .DS_Store
 Thumbs.db
 
+# 本地工具安装（gh.exe 等）：15 MB 的二进制，不属于源码
+.tools/
+
 # 从 app.asar 抽出来的发行版代码：是"被检查的对象"，不是我们的源码
 plugin-design/mathfind/
 plugin-design/_asar/
