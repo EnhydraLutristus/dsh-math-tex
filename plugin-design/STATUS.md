@@ -17,6 +17,28 @@ node plugin-design/install.mjs --uninstall dsh-math-tex   # 反安装（可指�
 cd plugin-design/dsh-math-tex; npm test                   # 8 个测试文件，517 条断言
 ```
 
+源码已推到私有仓库 **https://github.com/EnhydraLutristus/dsh-math-tex**（`main`）。
+
+**在这台机器上跑 git 要用包装脚本** `.tools\git.ps1`（把参数原样传给 git）：
+
+```powershell
+.\.tools\git.ps1 status
+.\.tools\git.ps1 push
+```
+
+原因不是墙也不是代理（系统里没有任何代理），而是 **DNS 给 `github.com` 解析出的
+`20.205.243.166` 在 443 上稳定超时**：连续三次 21s 超时；而同一 /24 的
+`.160`–`.165`、`.167`–`.169`、`140.82.11x.3`、`api.github.com`、`codeload.github.com`、
+`ssh.github.com` 全部 0.3s 通。GitHub 所有地址共用同一张证书，所以用
+`git -c http.curloptResolve=github.com:443:140.82.112.3` 把主机名指到可用 IP，
+TLS 校验照样通过（`curl --resolve` 返回 404 而非 TLS 错误，证明这条路是通的）。
+`.tools\git.ps1` 就是这件事加三次重试。
+
+凭据放在 `.tools\gh-token.txt`（`gho_` 前缀，scope 仅 `repo`，`.tools/` 已在
+`.gitignore` 里），用仓库级 credential helper 交给 git，不写进 remote URL、
+不落到 `.git/config` 的明文里。`.tools\gh-device-login.py` 是设备码授权脚本
+（自己实现、对每个请求重试，因为 gh 自己不重试）。
+
 `install.mjs` 只认 `package.json` 的 `files` 列表（`package.json` 本身无条件复制——
 少了它 Node 根本解析不了这个目录，而且会在宿主里报 ENOENT 而不是报打包错误）。
 所有对 profile `package.json` 的改动都走 `JSON.parse`/`JSON.stringify` 并留 `.bak-*` 备份。
