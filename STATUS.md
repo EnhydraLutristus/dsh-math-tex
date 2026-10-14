@@ -31,10 +31,14 @@ profile 目录可用 `DSH_PROFILE_DIR` 覆盖。
 **在这台机器上跑 git 要用包装脚本** `<workspace>\.tools\git.ps1`（把参数原样传给 git）：
 
 ```powershell
-# 假设当前在这个仓库的根目录（`.tools\` 相对 workspace 根，要在 workspace 根调用）
-..\..\.tools\git.ps1 -C . status
-..\..\.tools\git.ps1 -C . push
+# 在仓库目录里直接调用即可；参数原样传给 git，仓库位置由当前目录向上找 .git
+cd <本仓库>
+& %USERPROFILE%\Documents\deepseek-harness\default-workspace\.tools\git.ps1 push
+& %USERPROFILE%\Documents\deepseek-harness\default-workspace\.tools\git.ps1 -C <本仓库> status
 ```
+
+（早期版本把仓库路径写死成 workspace 根，于是 `-C <子仓库> push` 会报失败但推送其实
+成功了；现在脚本从当前目录向上找 `.git`，也接受显式 `-C`，找不到仓库会明确以 128 退出。）
 
 原因不是墙也不是代理（系统里没有任何代理），而是 **DNS 给 `github.com` 解析出的
 `20.205.243.166` 在 443 上稳定超时**：连续三次 21s 超时；而同一 /24 的
