@@ -36,9 +36,12 @@ profile 目录可用 `DSH_PROFILE_DIR` 覆盖。
 ```powershell
 # 在仓库目录里直接调用即可；参数原样传给 git，仓库位置由当前目录向上找 .git
 cd <本仓库>
-& %USERPROFILE%\Documents\deepseek-harness\default-workspace\.tools\git.ps1 push
-& %USERPROFILE%\Documents\deepseek-harness\default-workspace\.tools\git.ps1 -C <本仓库> status
+& $env:DSH_WORKSPACE\.tools\git.ps1 push
+& $env:DSH_WORKSPACE\.tools\git.ps1 -C <本仓库> status
 ```
+
+(`$env:DSH_WORKSPACE` 是 checkout 的上一层目录，即 `.tools\` 所在的位置；
+换成绝对路径同样可以。)
 
 （早期版本把仓库路径写死成 workspace 根，于是 `-C <子仓库> push` 会报失败但推送其实
 成功了；现在脚本从当前目录向上找 `.git`，也接受显式 `-C`，找不到仓库会明确以 128 退出。
@@ -176,3 +179,7 @@ TLS 校验照样通过（`curl --resolve` 返回 404 而非 TLS 错误，证明�
   判断"到底跑的是哪份代码"要在新会话里重新验证，别信 PID 没变就以为没重载。
 - **事故文本本身可能是"没坏"的**：夹具如果复刻得不够狠，测试会给出"未发现缺陷"的
   假绿，所以先拿夹具自己去渲染一遍，确认它真的会红。
+- **别把本机身份写进代码**：会话目录名是"绝对路径里非字母数字全换成 `-`"得来的，这个
+  变换**不可逆**（`C:\a\b-c` 和 `C:\a\b\c` 结果一样），所以不能由路径反推 slug，只能
+  运行时扫描 `<dsh home>/sessions/`。工具统一走 `tools/sessions.mjs`，不要在别处再写
+  第二份定位逻辑。这个仓库是公开的，路径里的用户名会跟着历史一起被存档。

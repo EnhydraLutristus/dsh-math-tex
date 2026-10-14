@@ -1,12 +1,25 @@
 // Dump the exact stored markdown around two known-bad regions of a session, so the regression
 // test can quote real text instead of a paraphrase of it.
+//
+// RUN: node tools/dump-real-region.mjs [sessionId]     (no argument = newest session)
 import fs from 'node:fs'
 import path from 'node:path'
 import zlib from 'node:zlib'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { dirname, join } from 'node:path'
 
-const SESSION = 'session-d7c78d3f-06cf-4add-95f3-aa4fa9400ef9'
-const ROOT = path.join(process.env.USERPROFILE, '.dsh', 'sessions', '--C-Users-<user>-Documents-deepseek-harness-default-workspace--', SESSION)
-const buf = fs.readFileSync(path.join(ROOT, 'session.v4.jsonl.zstd'))
+const here = dirname(fileURLToPath(import.meta.url))
+const { findSession, sessionsRoot } = await import(pathToFileURL(join(here, 'sessions.mjs')).href)
+
+const found = await findSession(process.argv[2])
+if (!found) {
+  console.error(`no session record matching ${process.argv[2] ?? '(newest)'}`)
+  console.error(`looked under ${sessionsRoot() || '(no DSH home found)'}`)
+  process.exit(1)
+}
+console.log(`# ${found.sessionId}  (${found.workspace})\n`)
+
+const buf = fs.readFileSync(found.file)
 const MAGIC = Buffer.from([0x28, 0xb5, 0x2f, 0xfd])
 const bySeq = new Map()
 for (let p = 0; p < buf.length - 3; p++) {

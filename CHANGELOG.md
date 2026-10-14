@@ -36,6 +36,17 @@
   `installed-test`。现在的口径是每次 `npm test` 的逐文件输出（本版依次
   39/48/39/23/97/236/26/22/10，合计 **9 个文件 540 条**），文档不再手写总数。
 
+- **工具与文档不再写死本机身份**：`tools/verify-live.mjs` 与 `tools/dump-real-region.mjs`
+  原来把 workspace 的会话目录名（由绝对路径转写而来，含用户名）写成常量，因此只能在这一台
+  机器的这一个目录里跑。现在新增 `tools/sessions.mjs` 在运行时定位会话记录：按
+  `DSH_HOME` → `%USERPROFILE%\.dsh` 的次序推目录（与 `lib/guard.js` 同一套优先级），
+  遍历 `<dsh home>/sessions/**` 找出全部会话并按 mtime 排序，因此"最近一次会话"和
+  "按 id 找会话"都跨 workspace 可用，工具也不再依赖 checkout 放在哪。
+  `verify-live.mjs` 的日志文件同样改为按候选路径实测存在性（显式 `DSH_MATH_TEX_LOG`
+  → profile 下的 `dsh-math-tex.log` / `math-guard.log` → workspace 根的旧位置）。
+  文档里的 `C:\Users\<用户名>\…` 一律换成 `%USERPROFILE%` / `$env:USERPROFILE`。
+  **对插件运行时无影响**：`lib/` 一行未动。
+
 ### 新增
 
 - `test/regression-test.mjs`（23 条断言）：用例逐字引自真实会话记录，断言的不是"判定说了

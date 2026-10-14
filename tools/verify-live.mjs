@@ -32,31 +32,30 @@ import { dirname, join } from 'node:path'
 const here = dirname(fileURLToPath(import.meta.url))
 const lib = await import(pathToFileURL(join(here, '..', 'lib', 'tex-repair.js')).href)
 const { TOKEN } = await import(pathToFileURL(join(here, '..', 'lib', 'guard.js')).href)
+const { findSession, sessionsRoot, dshHome } = await import(pathToFileURL(join(here, 'sessions.mjs')).href)
 
-const WORKSPACE_SLUG = '--C-Users-<user>-Documents-deepseek-harness-default-workspace--'
-const ROOT = join(process.env.USERPROFILE ?? '', '.dsh', 'sessions', WORKSPACE_SLUG)
-const LOG = process.env.DSH_MATH_TEX_LOG ?? join(here, '..', '..', 'math-guard.log')
+// The guard's log lives wherever the profile config puts it, so "which file is it" is a search,
+// not a constant: an explicit override wins, then the log the profile ships next to its config,
+// then a log dropped at the workspace root by an older setup.
+const LOG =
+  process.env.DSH_MATH_TEX_LOG ??
+  [
+    join(dshHome() || '.', 'profiles', 'desktop', 'dsh-math-tex.log'),
+    join(dshHome() || '.', 'profiles', 'desktop', 'math-guard.log'),
+    join(here, '..', '..', 'math-guard.log'),
+  ].find((p) => fs.existsSync(p)) ??
+  join(dshHome() || '.', 'profiles', 'desktop', 'dsh-math-tex.log')
 const MAGIC = Buffer.from([0x28, 0xb5, 0x2f, 0xfd])
 
-if (!fs.existsSync(ROOT)) {
-  console.error(`no session directory at ${ROOT}`)
-  process.exit(1)
-}
-
 /** The session record: many concatenated zstd frames, one per append. */
-function decode(sessionId) {
-  const dirs = fs
-    .readdirSync(ROOT, { withFileTypes: true })
-    .filter((d) => d.isDirectory())
-    .map((d) => join(ROOT, d.name, 'session.v4.jsonl.zstd'))
-    .filter((f) => fs.existsSync(f))
-  const file = sessionId
-    ? dirs.find((f) => f.includes(sessionId))
-    : dirs.sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0]
-  if (!file) {
+async function decode(sessionId) {
+  const found = await findSession(sessionId)
+  if (!found) {
     console.error(`no session record matching ${sessionId ?? '(newest)'}`)
+    console.error(`looked under ${sessionsRoot() || '(no DSH home found)'}`)
     process.exit(1)
   }
+  const file = found.file
 
   const buf = fs.readFileSync(file)
   const bySeq = new Map()
@@ -86,7 +85,7 @@ function decode(sessionId) {
   return { file, frames, records: [...bySeq.values()].sort((a, b) => a.seq - b.seq) }
 }
 
-const { file, frames, records } = decode(process.argv[2])
+const { file, frames, records } = await decode(process.argv[2])
 console.log(`session : ${path.basename(dirname(file))}`)
 console.log(`mtime   : ${new Date(fs.statSync(file).mtimeMs).toISOString()}`)
 console.log(`frames  : ${frames}   records: ${records.length}\n`)

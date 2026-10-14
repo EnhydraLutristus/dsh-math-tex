@@ -40,7 +40,7 @@ catch (error) {
 
 ### 0.2 查日志：没有渲染器崩溃记录
 
-搜遍 `%USERPROFILE%\.dsh\`（sessions、logs）、`AppData\Roaming\@deepseek-ai\dsh-desktop\`（crash logs、logs、Local Storage）、`%TEMP%`、Crashpad，用 `katex|ParseError|Maximum call stack|RangeError|heap out of memory|GPU process|Uncaught` 逐条筛。
+搜遍 `$env:USERPROFILE\.dsh\`（sessions、logs）、`AppData\Roaming\@deepseek-ai\dsh-desktop\`（crash logs、logs、Local Storage）、`%TEMP%`、Crashpad，用 `katex|ParseError|Maximum call stack|RangeError|heap out of memory|GPU process|Uncaught` 逐条筛。
 
 **没有任何渲染器崩溃的证据。** 四份 crash log **全部是 `source: host`**，同一条错误：
 
