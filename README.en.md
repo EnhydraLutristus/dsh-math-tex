@@ -134,10 +134,19 @@ npm test
 | `fuzz-test` | does that hold under 236 arbitrary chunkings? | 236 |
 | `config-test` | does every documented option actually do something? | 26 |
 | `smoke-test` | does the package load the way the host loads it? | 22 |
+| `installed-test` | can the **installed copy** in the profile (not the source tree) load and repair? | 10 |
+| `regression-test` | do fixed defects stay fixed? (cases quoted verbatim from real sessions) | 23 |
+
+540 assertions across 9 files, about 4 seconds, no network.
 
 `fuzz-test` is the strongest instrument: it requires **any** chunking of the real incident —
 one character per frame up to 1600, plus random splittings — to reassemble byte-identically
 to the single-pass repair.
+
+`regression-test` is the only file whose assertion is about the **emitted text** rendering
+without red; the others check the judge and the region structure. It is the last line of
+defence against "the verdict was right but the rewrite is still red". Revert the fix and it
+fails 4 assertions.
 
 ## Design boundaries
 

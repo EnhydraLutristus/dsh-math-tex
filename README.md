@@ -111,8 +111,13 @@ npm test
 | `config-test` | 每个文档化选项是否真的有效 | 26 |
 | `smoke-test` | 包是否按宿主的加载方式加载 | 22 |
 | `installed-test` | profile 里那份**安装副本**（不是源码目录）能否加载并自修 | 10 |
+| `regression-test` | 已修缺陷不再回归（用例逐字引自真实会话） | 23 |
+
+合计 9 个文件、540 条断言，约 4 秒，不需要网络。
 
 最有说服力的是 `fuzz-test`：它要求**真实事故文本的任意切分**（1 字符一帧到 1600 字符一帧，外加随机切分）最终都重组为**逐字相同**的整篇修复结果。
+
+`regression-test` 是唯一断言"**输出来的文本**渲染后没有红色"的文件——其余文件盯的是判定与结构，它是最后一道"判定对了、但改完仍然红"的防线。把修复回退掉，它会红 4 条。
 
 ### 关于 `test/fixtures/real-broken.txt`
 
@@ -126,6 +131,14 @@ node tools/inspect-fixture.mjs path/to/text.md    # 换成任何一份文本
 ```
 
 它会打印区域数量、被标记的区域及其原因、修复动作，以及修复后是否还有区域会被渲染成红色。
+
+排查真实会话时另有三件工具：
+
+```bash
+node tools/find-red-session.mjs                   # 扫本机所有会话，列出还会渲染成红色的回答
+node tools/inspect-session.mjs <session.jsonl>    # 单条会话逐条消息：区域、判定、守卫会怎么修
+node tools/probe-region.mjs 'd\alpha=0'           # 把候选写法逐个送进渲染器，看哪种被接受
+```
 
 ## 设计边界
 
