@@ -84,7 +84,7 @@ await check('oracle is the build the client renders with', () => {
   assert.match(status.version, /^0\.16\./, `unexpected katex version ${status.version}`)
 })
 await check('strict call succeeds on a valid formula', () => {
-  const v = judge('u(x,t)=\\frac12[\\varphi(x-t)+\\varphi(x+t)]', true)
+  const v = judge('E=mc^2=9\\times10^{16}', true)
   assert.equal(v.ok, true, v.message ?? '')
   assert.equal(v.red, false)
 })
@@ -93,7 +93,7 @@ await check('error-coloured render is detected even when nothing threw', () => {
   assert.equal(v.red, true, 'the diagnostic render should carry the error colour')
 })
 await check('a healthy document is reported clean', () => {
-  const doc = '推导如下：\n\n$$\nu=\\frac12\n$$\n\n所以 x=1 时 u≈0.3367。\n'
+  const doc = '推导如下：\n\n$$\nS=\\sum_{k=1}^{n}\\frac{1}{k^2}\n$$\n\n所以 n=10 时 S≈1.5498。\n'
   assert.equal(inspectText(doc).flagged.length, 0)
   assert.equal(repairText(doc).repairs.length, 0)
 })
@@ -148,14 +148,14 @@ await check('a guarded stream passes healthy text through byte-identically', asy
   const upstream = (async function* () {
     yield { type: 'block-start', index: 0, blockType: 'text' }
     yield { type: 'text-delta', index: 0, text: '结论：' }
-    yield { type: 'text-delta', index: 0, text: 'u≈0.3367。' }
+    yield { type: 'text-delta', index: 0, text: 'S≈1.5498。' }
     yield { type: 'block-end', index: 0 }
   })()
   const out = []
   for await (const chunk of entry.guardStream(upstream, {})) {
     if (chunk.type === 'text-delta') out.push(chunk.text)
   }
-  assert.equal(out.join(''), '结论：u≈0.3367。')
+  assert.equal(out.join(''), '结论：S≈1.5498。')
 })
 await check('a guarded stream repairs a broken region on the way through', async () => {
   const broken = '看这个 $$x_1_2$$ 公式。'

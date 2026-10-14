@@ -16,6 +16,8 @@
 - **修不了就围栏**：结构性损坏以源码块给出，数学永不删除。
 - **完整配置面**：`enabled`、`promptRules`、`repair`（`auto` / `check-only` / `off`）、`tailBuffer`、`maxHold`、`logFile`、`katexPath`、`macros`。未知键报错而非静默忽略。
 - **测试套件 8 个文件 517 条断言**（`npm test`），其中 `fuzz-test` 要求真实事故文本的任意切分（1 字符一帧到 1600 字符一帧，外加随机切分）重组为逐字相同的整篇修复结果，`installed-test` 校验宿主 profile 里那份副本（而不是源码目录）能加载、导出面完整、并且自己就能修复。
+- **夹具与包内容与具体题目无关**：`test/fixtures/real-broken.txt` 保留事故文本的**缺陷形态**（同一批缺陷类别、同样的区域数量与配对错位），内容替换为通用推导；示例、文档与注释中不再出现任何一次具体事故的题材。
+- **`tools/inspect-fixture.mjs`**：对任意文本打印区域数量、被标记的区域与原因、修复动作，以及修复后是否仍有区域会渲染成红色——用来独立复核判定，不必先读源码。
 - 包结构：`lib/`（`index.js` / `guard.js` / `tex-repair.js` / `config.js`）、`test/`、`locale/`、`dsh-plugin.json` 清单、图标及其生成脚本。
 
 ### 变更（相对原型 `math-guard` 0.1.0）

@@ -92,7 +92,7 @@ for (const size of sizes) {
 }
 
 // A document with no sentinel at all must survive every chunking byte-identically.
-const plain = `普通回答，没有哨兵。\n\n$$\nu=\\frac12[\\varphi(1)+\\varphi(1)]\n$$\n\n结论：0.367879。\n`
+const plain = `普通回答，没有哨兵。\n\n$$\nS=\\sum_{k=0}^{\\infty}\\frac{1}{2^k}=2\n$$\n\n结论：级数收敛到 2。\n`
 for (const size of sizes) {
   const got = streamInPieces(plain, size)
   check(`plain text, chunk=${size} is byte-identical`, got === plain, `got ${JSON.stringify(got.slice(0, 60))}`)

@@ -22,10 +22,10 @@ function check(name, condition, detail) {
 console.log('=== A. clean text must NOT be touched ===\n')
 const cleanCases = [
   ['inline maths', '设 $u_t(x,0)=0$ 时公式只剩第一项。'],
-  ['display maths on its own paragraph', '推导如下：\n\n$$\nu=\\tfrac12[\\varphi(x-t)+\\varphi(x+t)]\n$$\n\n继续。'],
-  ['display maths with CJK inside \\text{}', '$$\n\\underbrace{\\tfrac12\\varphi(x-t)}_{\\text{右行波 }F}\n$$'],
+  ['display maths on its own paragraph', '推导如下：\n\n$$\n\\frac{\\partial u}{\\partial t}=c^2\\frac{\\partial^2 u}{\\partial x^2}\n$$\n\n继续。'],
+  ['display maths with CJK inside \\text{}', '$$\n\\underbrace{\\sin^2\\theta+\\cos^2\\theta}_{\\text{恒等式 }I}\n$$'],
   ['long legal formula', `$$\\sum_{i=1}^{n}\\frac{\\partial u_i}{\\partial t} + \\sum_{j=1}^{m}\\frac{\\partial^2 u_j}{\\partial x^2} = \\int_0^T f(s)\\,ds + \\underbrace{g(x)}_{\\text{source host}} + \\Theta(1)$$`],
-  ['cases environment', '$$\nu(x,t)=\\begin{cases} \\tfrac12[\\varphi(x-t)+\\varphi(x+t)], & x\\ge t\\\\ \\tfrac12[-\\varphi(t-x)+\\varphi(x+t)], & x<t\\end{cases}\n$$'],
+  ['cases environment', '$$\nf(x)=\\begin{cases} x^2, & x\\ge 0\\\\ -x^2, & x<0\\end{cases}\n$$'],
   ['money in prose (not maths)', '价格是 $5 到 $6 之间，另外 $x$ 是变量。'],
   ['no maths at all', '这段中文完全没有公式，也没有美元符号。'],
   ['escaped dollar', '成本 \\$100 与 \\$200。'],
@@ -45,13 +45,13 @@ console.log('\n=== B. broken text must be caught, without losing the formula ===
 const brokenCases = [
   [
     'glued heading inside the display block',
-    '$$\n=\\underbrace{\\tfrac12\\varphi(x-t)}_{\\text{右行波 }F}\n## 第 2 步：写出反射规则\n$$',
+    '$$\nx=\\underbrace{\\frac{-b\\pm\\sqrt{b^2-4ac}}{2a}}_{\\text{求根公式 }R}\n## 第 2 步：代入系数\n$$',
     '第 2 步',
   ],
   [
     '$$ opened mid-paragraph (pairs one off)',
-    '公式如下：$$=\\varphi(x-t)+\\varphi(x+t)$$ 初始鼓包被劈成两半。',
-    '\\varphi(x-t)',
+    '公式如下：$$S_n=\\frac{n(a_1+a_n)}{2}$$ 这是等差数列的求和公式。',
+    '\\frac{n(a_1+a_n)}{2}',
   ],
   [
     'unclosed brace',
@@ -70,8 +70,8 @@ const brokenCases = [
   ],
   [
     'unterminated inline maths',
-    '计算 $u=\\varphi(x-t) 到这里结束。',
-    '\\varphi(x-t)',
+    '计算 $E=mc^2 到这里结束。',
+    'E=mc^2',
   ],
   [
     '\\begin without \\end',
@@ -115,9 +115,9 @@ check('the real incident text is detected as broken', beforeBad.length > 0, 'zer
 check('the repaired text has no rejected regions', afterBad.length === 0, `${afterBad.length} still rejected`)
 check(
   'the mathematics survives the repair',
-  repairedReal.includes('\\underbrace{\\tfrac12\\varphi(x-t)}_{\\text{右行波 }F}') &&
-    repairedReal.includes('e^{-2.25}') &&
-    repairedReal.includes('-0.490842'),
+  repairedReal.includes('\\begin{cases}') &&
+    repairedReal.includes('\\frac{0.04}{4}') &&
+    repairedReal.includes('1.2196'),
   'a formula fragment is missing from the repaired text',
 )
 

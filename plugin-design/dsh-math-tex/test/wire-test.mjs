@@ -74,12 +74,12 @@ async function runStream(deltas, { blocks = [[1, 'text']] } = {}) {
 }
 
 // ---------------------------------------------------------------- fixtures --
-const CLEAN_INLINE = '由达朗贝尔公式，$u(x,t)=\\frac12[\\varphi(x-t)+\\varphi(x+t)]$，代入 $x=1$ 得 $u\\approx-0.0092$。'
-const CLEAN_DISPLAY = '于是\n\n$$\nu(x,t)=\\frac{\\tilde\\varphi(x-t)+\\varphi(x+t)}{2}\n$$\n\n其中 $\\tilde\\varphi$ 是奇延拓。'
-const BROKEN_GLUED = '$$\nu=\\frac12[\\varphi(0)+\\varphi(2)]## 第 3 步：算出数值\n$$'
-const BROKEN_MIDLINE = '初始条件只剩第一项：$$u=\\tfrac12[\\varphi(1)+\\varphi(1)]=\\varphi(1)=e^{-1}$$ 于是得到 $0.367879$。'
-const BROKEN_UNCLOSED = '$$\nu=\\frac12[\\varphi(1)+\\varphi(1)'
-const BROKEN_BRACE = '$$\nu=\\frac12[\\varphi(x-t)$$\n\n然后继续。'
+const CLEAN_INLINE = '由微积分基本定理，$\\int_0^1 x^2\\,dx=\\frac13$，代入 $x=1$ 得 $\\frac13\\approx0.3333$。'
+const CLEAN_DISPLAY = '于是\n\n$$\nS=\\sum_{k=0}^{\\infty}\\frac{1}{2^k}=2\n$$\n\n其中 $S$ 是几何级数的和。'
+const BROKEN_GLUED = '$$\nS=\\frac{a_1}{1-q}=\\frac{1}{0.5}## 第 3 步：算出数值\n$$'
+const BROKEN_MIDLINE = '初始条件只剩第一项：$$\\int_0^1 x\\,dx=\\frac{1}{2}=\\frac{2}{4}$$ 于是得到 $0.5$。'
+const BROKEN_UNCLOSED = '$$\nE=mc^2=9\\times10^{16}'
+const BROKEN_BRACE = '$$\nx=\\frac{-b\\pm\\sqrt{b^2-4ac}$$\n\n然后继续。'
 const MONEY = '成本是 $5，收益是 $8，所以净赚。'
 
 console.log(`math-guard wire tests — BUILD=${BUILD}`)
@@ -131,9 +131,9 @@ console.log('\n=== B. content is never lost ===')
 {
   // Repairing may add fences or re-frame, but must never delete the mathematics.
   const { text: got } = await runStream(chunkAt(BROKEN_MIDLINE, indices(BROKEN_MIDLINE)))
-  check('formula source survives a repair', got.includes('\\tfrac12[\\varphi(1)+\\varphi(1)]=\\varphi(1)=e^{-1}'), JSON.stringify(got))
+  check('formula source survives a repair', got.includes('\\int_0^1 x\\,dx=\\frac{1}{2}=\\frac{2}{4}'), JSON.stringify(got))
   check('surrounding prose survives', got.includes('初始条件只剩第一项') && got.includes('于是得到'), JSON.stringify(got))
-  check('numbers are untouched', got.includes('0.367879'))
+  check('numbers are untouched', got.includes('0.5'))
 }
 
 console.log('\n=== C. the sentinel is always removed ===')

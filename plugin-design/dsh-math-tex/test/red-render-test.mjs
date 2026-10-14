@@ -87,9 +87,9 @@ for (const tex of unfixable) {
 console.log('\n=== 5. healthy regions must not be touched ===')
 const healthies = [
   '\\frac{1}{2}',
-  '\\text{右行波}',
+  '\\text{恒等式}',
   '\\underbrace{\\underbrace{a}_{1}}_{2}',
-  'u = \\varphi(x)',
+  'E = mc^2',
   '\\begin{cases} a & x \\ge t \\\\ b & x < t \\end{cases}',
   '\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}',
 ]

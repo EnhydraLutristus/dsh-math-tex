@@ -17,8 +17,8 @@
  * THE RELEASE RULE
  *
  * Deltas arrive in arbitrary pieces, but a repair decision needs a whole region:
- * repairing `$u=\frac12` in isolation is not a prefix of repairing
- * `$u=\frac12[\varphi(1)]$`, because KaTeX parses the first as maths that never closed.
+ * repairing `$E=mc^2` in isolation is not a prefix of repairing
+ * `$E=mc^2=9\times10^{16}$`, because KaTeX parses the first as maths that never closed.
  * So the guard holds text until it can prove it will not change, and the proof is the
  * plugin's central invariant:
  *

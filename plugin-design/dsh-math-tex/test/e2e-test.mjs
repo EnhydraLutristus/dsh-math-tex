@@ -32,7 +32,7 @@ function render(value, displayMode) {
 
 const TOKEN = guard.TOKEN
 const fixture = readFileSync(new URL('./fixtures/real-broken.txt', import.meta.url), 'utf8')
-const raw = `前言，先说明一下。\n\n${TOKEN}\n${fixture}\n${TOKEN}\n\n结论：t=1.5 时 u≈0.3367，t=3 时 u≈-0.0092。\n`
+const raw = `前言，先说明一下。\n\n${TOKEN}\n${fixture}\n${TOKEN}\n\n结论：\n=0.05 时区间宽 0.039，n=64 时半宽 0.0098。\n`
 
 console.log('=== the guard, end to end ===')
 console.log(`  katex ${katex.version}, BUILD=${guard.BUILD}`)
@@ -59,7 +59,7 @@ for (const size of [1, 3, 7, 13, 64, 512, 100000]) {
 
   const clean = out
   check(`chunk=${size}: the sentinel is gone`, !clean.includes(TOKEN))
-  check(`chunk=${size}: the conclusion survived`, clean.includes('结论：t=1.5'))
+  check(`chunk=${size}: the conclusion survived`, clean.includes('结论：'))
   check(`chunk=${size}: no content was dropped`, clean.length >= 1000, `${clean.length} chars`)
 
   // The repaired regions must now pass the strict pass in both framings — that is the
@@ -82,10 +82,10 @@ const mismatched = varying.filter((s) => run(s) !== ref)
 check('every chunking yields the same answer', mismatched.length === 0, `differ at ${mismatched.join(',')}`)
 
 // --- nothing is lost, only reframed ---------------------------------------
-const prose = ['前言，先说明一下。', '结论：t=1.5 时 u≈0.3367，t=3 时 u≈-0.0092。', '第 1 步', '第 2 步', '第 3 步']
+const prose = ['前言，先说明一下。', '结论：', '第 1 步', '第 2 步', '第 3 步', '样本均值']
 const missing = prose.filter((p) => !ref.includes(p))
 check('all prose survives the repair', missing.length === 0, `missing: ${missing.join(' | ')}`)
-const mathKept = ['\\varphi', '\\underbrace', 'e^{-2.25}', '0.336701'].filter((t) => !ref.includes(t))
+const mathKept = ['\\begin{cases}', '\\frac{0.04}{4}', '1.2196', '1.1608'].filter((t) => !ref.includes(t))
 check('the mathematics itself is preserved', mathKept.length === 0, `missing: ${mathKept.join(', ')}`)
 
 // --- the fallback is fenced, not re-parsed as maths ------------------------
@@ -99,11 +99,11 @@ check('rejected regions are emitted inside fences', fences >= 2, `${fences} fenc
 const nasty = [
   '# 第 1 步：分解',
   '',
-  '正文里的坏公式：$$\\frac{1}{2}\\varphi(x-t)}_{\\text{右行波} ## 第 2 步：写出反射规则',
+  '正文里的坏公式：$$S_n=\\frac{n(a_1+a_n)}_{\\text{通项} ## 第 2 步：代入首末项',
   '',
-  '另一个：$\\begin{cases} a & x\\ge t \\\\ b & x<t \\end{cases}$ 未闭合收尾。',
+  '另一个：$\\begin{cases} a & x\\ge 0 \\\\ b & x<0 \\end{cases}$ 未闭合收尾。',
   '',
-  '结论：$u(1,1.5)=0.3367$。',
+  '结论：$S_{10}=55$。',
 ].join('\n')
 
 const nastyIn = findMathRegions(nasty)
@@ -118,9 +118,9 @@ nastyOut += nastyState.finish()
 const nastyRegions = findMathRegions(nastyOut)
 const nastyStillBad = nastyRegions.filter(rejects)
 check('after repair no region is rejected in either framing', nastyStillBad.length === 0, `${nastyStillBad.length} still rejected`)
-check('the repaired control still carries its conclusion', nastyOut.includes('0.3367'))
+check('the repaired control still carries its conclusion', nastyOut.includes('55'))
 check('the repaired control keeps the heading text', nastyOut.includes('第 1 步：分解'))
-check('the repaired control keeps the prose after the maths', nastyOut.includes('写出反射规则'))
+check('the repaired control keeps the prose after the maths', nastyOut.includes('代入首末项'))
 console.log(`  control: ${nastyIn.length} region(s) -> ${nastyRegions.length} region(s), ${nastyStillBad.length} rejected after repair`)
 
 console.log(`\n  reference output: ${ref.length} chars, ${findMathRegions(ref).length} math region(s)`)
