@@ -1,13 +1,16 @@
 # dsh-math-tex — 当前状态（可交接）
 
-包名 `dsh-math-tex` 1.0.0。**仓库根目录就是包根目录**，
-装到 `%USERPROFILE%\.dsh\profiles\desktop\node_modules\dsh-math-tex\`，
+包名 `dsh-math-tex` 1.1.0。**仓库根目录就是包根目录**（checkout 在
+`default-workspace\dsh-math-tex\`，workspace 里现在只剩这一个项目，其余全在
+`default-workspace\_archive\`）。装到
+`%USERPROFILE%\.dsh\profiles\desktop\node_modules\dsh-math-tex\`，
 并登记在 `%USERPROFILE%\.dsh\profiles\desktop\package.json` 的
 `dsh.profile.bundles` 与 `dependencies`。
 
 它不是设计文档（设计见 `docs/DESIGN.md`，实测记录见 `docs/FINDINGS.md`），
 而是"现在到底装了什么、证明了什么、还差什么"。
-原型包 `math-guard` 0.1.0 已退役（已从 bundles 移除，目录留在 `node_modules` 里）。
+原型包 `math-guard` 0.1.0 已退役（已从 bundles 移除，目录留在 `node_modules` 里，
+它的源码在 `default-workspace\_archive\proto\`）。
 
 **包内容与具体题目无关**：`lib/` 的注释、`test/` 的夹具与断言、README 与 CHANGELOG
 里的示例一律使用通用推导（级数、定积分、恒等式）。`test/fixtures/real-broken.txt`

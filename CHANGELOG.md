@@ -2,12 +2,16 @@
 
 本文件记录每个版本的**可观察行为**变化。格式参考 Keep a Changelog，版本号遵循语义化版本。
 
-## [Unreleased]
+## [1.1.0] — 2026-10-14
 
 ### 变更
 
 - **仓库根目录就是包根目录**：不再有 `plugin-design/` 这一层（仓库里曾经混放侦察脚本、
   数学核对记录和别的题目材料）。`README.md` 随之重写，只讲这个插件。
+- **checkout 提到了 workspace 顶层**：本包从 `default-workspace/plugin-design/dsh-math-tex/`
+  移到 `default-workspace/dsh-math-tex/`，装完之后 workspace 里只剩它一个项目。仓库自身
+  的 git 历史、远端与已安装的 profile 副本都不受影响（profile 指向的是
+  `node_modules/` 里那份拷贝，不是这个 checkout）。
 - **安装脚本移到 `tools/install.mjs`**：路径全部由 `import.meta.url` 推出，checkout 放在
   哪里都能跑，可用 `DSH_PROFILE_DIR` 指向别的 profile；README 里的命令同步更新。
 - **新增 `docs/`**：把判据的来源随包发布——`FINDINGS.md`（到底坏在哪）、
@@ -78,4 +82,5 @@
 - 仅 host 侧：唯一能同时影响屏幕、记录与压缩的拦截点是 `llm/stream`。
 - 打开但未闭合的 `$$` 会吞掉后续正文，这属于 Markdown 解析行为，不属于可修复的公式区域。
 
+[1.1.0]: https://github.com/EnhydraLutristus/dsh-math-tex/releases/tag/v1.1.0
 [1.0.0]: https://github.com/EnhydraLutristus/dsh-math-tex/releases/tag/v1.0.0

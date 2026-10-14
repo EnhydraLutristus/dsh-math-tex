@@ -341,11 +341,14 @@ streamWithRegistration(options, prepared) {
 
 ```powershell
 # 现象复现与阈值测量（宽矩阵、嵌套 frac、宏展开、各类语法错误）
-node plugin-design\katex-stress.js
+node ..\_archive\recon\katex-stress.js
 
 # 两种"人格"（抛异常 vs 红块）与放大曲线
-node plugin-design\katex-personas.js
+node ..\_archive\recon\katex-personas.js
 
 # 修复函数的误伤/幂等回归测试
-node plugin-design\repair-math.js
+node ..\_archive\recon\repair-math.js
 ```
+
+这三个脚本在取证结束后就移出了本包，现在放在 workspace 的 `_archive\recon\`
+（目录地图见 `_archive\README.md`）。它们用的仍然是 profile 里那份渲染器。

@@ -178,7 +178,8 @@ ctx.on('slots/changed', (key: string) => void)
 | `\begin{cases}…` | 逐行 + `{` 前缀 |
 | `\text{恒等式}` | `恒等式` |
 
-这个表**离线可用**，正好复用本机已验证的排版成果（`math-typeset/` 里那份 XeLaTeX 重排稿可作为"高质量版"对照）。
+这个表**离线可用**，正好复用本机已验证的排版成果（当时那份 XeLaTeX 重排稿可作为
+"高质量版"对照；原稿在 workspace 的 `_archive\wave-typeset-notes\`，不在本包内）。
 好处：**任何输入都有可读输出**，用户不会看到裸 `\underbrace` 糊成一团。
 
 ---
