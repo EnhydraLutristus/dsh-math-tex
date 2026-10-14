@@ -1,0 +1,15 @@
+{
+  "name": "dsh-math-tex",
+  "title": "dsh-math-tex — math output repair",
+  "description": "Prompt rules plus a pre-persistence stream guard that repairs any math region the renderer would paint red.",
+  "options": {
+    "enabled": "Mount both defences (default true).",
+    "promptRules": "How much of the formatting rule set reaches the system prompt: full | minimal | off.",
+    "repair": "auto rewrites a broken region; check-only logs it; off passes everything through.",
+    "tailBuffer": "Smallest suffix of text held back so a completion marker cannot leak character by character.",
+    "maxHold": "Longest a single unclosed math region may wait before the text is released unrepaired.",
+    "logFile": "Diagnostic log path. Empty means the host logger only.",
+    "katexPath": "Pin the KaTeX build used for judging; by default it is resolved from the host profile.",
+    "macros": "Macros handed to the renderer, to match the client's behaviour."
+  }
+}

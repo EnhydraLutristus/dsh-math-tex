@@ -1,0 +1,4 @@
+FAIL -> %USERPROFILE%\Desktop\采访.docx :: PermissionError: [Errno 13] Permission denied: 'C:\\Users\\<user>\\Desktop\\采访.docx'
+OK   -> %USERPROFILE%\Desktop\采访-参访版.docx (44665 bytes)
+锁文件线索: ~$采访.docx
+目标文件时间戳: [('采访-参访版.docx', 1791635507.8831978), ('采访.docx', 1791634123.7936325)]

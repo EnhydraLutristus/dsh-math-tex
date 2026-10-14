@@ -1,0 +1,45 @@
+{
+  "$schema": "https://raw.githubusercontent.com/T-Auto/dsh-std/8a15541117cb3c13ddb8f2468308691b6051d162/packages/manifest/schema/dsh-plugin-0.15.schema.json",
+  "manifestVersion": "0.15",
+  "id": "dsh-math-tex",
+  "name": "dsh-math-tex",
+  "version": "1.0.0",
+  "license": "MIT",
+  "facets": {
+    "host": {
+      "entry": "lib/index.js",
+      "apiVersion": "v1alpha1"
+    }
+  },
+  "requires": {
+    "contracts": []
+  },
+  "permissions": [
+    {
+      "name": "dsh-math-tex.fs.write",
+      "scope": "dsh-home",
+      "reason": "Write the diagnostic log when logFile is configured. No file is written otherwise."
+    }
+  ],
+  "contributes": {
+    "x-display": [
+      {
+        "icon": "./icon.png",
+        "title": "dsh-math-tex",
+        "description": "Keeps math derivations readable: prompt rules plus a pre-persistence stream guard that repairs any region the renderer would paint red.",
+        "locales": [
+          "locale/en.json",
+          "locale/zh.json"
+        ]
+      }
+    ],
+    "x-prompt-sections": [
+      {
+        "name": "math-output-format",
+        "order": 1000,
+        "summary": "Display math on its own paragraph, nothing but math inside $$; selected by the promptRules option (full | minimal | off)."
+      }
+    ]
+  },
+  "subscriptions": []
+}

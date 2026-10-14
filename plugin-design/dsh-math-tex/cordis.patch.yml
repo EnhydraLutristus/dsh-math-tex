@@ -1,0 +1,16 @@
+# dsh-math-tex bundle patch — mounts the host half.
+#
+# The id must be globally unique across the composed plugin tree; `name` resolves to this
+# package's main entry (`lib/index.js`). Both defences are registered by that one entry, so
+# there is nothing else to mount.
+#
+# Options can be set from the profile's own `cordis.patch.yml` by targeting this id:
+#
+#   - id: dsh-math-tex
+#     name: dsh-math-tex
+#     config:
+#       repair: check-only
+#       logFile: C:/path/to/guard.log
+- insert:
+    - id: dsh-math-tex
+      name: 'dsh-math-tex'

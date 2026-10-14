@@ -1,0 +1,26 @@
+{
+  "name": "dsh-profile-desktop",
+  "private": true,
+  "dependencies": {
+    "@linxin666/dsh-pet": "0.4.5",
+    "dsh-better-sidebar": "0.24.1",
+    "dsh-find-plugin": "0.4.0",
+    "dsh-pet": "0.3.6",
+    "dsh-plugin-whale-pet": "^0.2.8",
+    "dshmarket": "1.66.9"
+  },
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "@deepseek-ai/dsh-base",
+        "@deepseek-ai/dsh-web-app",
+        "@deepseek-ai/dsh-experimental-auto-review",
+        "@deepseek-ai/dsh-experimental-voice-input-bundle",
+        "dsh-find-plugin",
+        "dshmarket",
+        "dsh-better-sidebar",
+        "dsh-pet"
+      ]
+    }
+  }
+}

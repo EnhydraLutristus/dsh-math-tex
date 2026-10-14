@@ -1,0 +1,23 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: false
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      dsh-plugin-whale-pet:
+        specifier: ^0.2.8
+        version: 0.2.8
+
+packages:
+
+  dsh-plugin-whale-pet@0.2.8:
+    resolution: {integrity: sha512-/SxKm2MDdFjwpDbDhKy4VSBcpzibc2A3NGOIu0ziI5zDvLn4qnhseJrmvVzyN7cWGojaI1+PhSz7JLRXX1WEnA==}
+    engines: {node: '>=22'}
+
+snapshots:
+
+  dsh-plugin-whale-pet@0.2.8: {}

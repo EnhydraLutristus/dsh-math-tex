@@ -1,0 +1,15 @@
+{
+  "name": "dsh-math-tex",
+  "title": "dsh-math-tex — 数学输出修复",
+  "description": "提示词规则 + 落盘前的流式守卫：把任何会被渲染成红字的公式区域修好。",
+  "options": {
+    "enabled": "是否挂载两道防线（默认 true）。",
+    "promptRules": "注入系统提示词的规则量：full | minimal | off。",
+    "repair": "auto 改写有问题的区域；check-only 只记日志；off 完全放行。",
+    "tailBuffer": "最少扣住的尾部字符数，避免完成记号被逐字泄漏。",
+    "maxHold": "单个未闭合公式区域最多等多少字符，超限就原样放行。",
+    "logFile": "诊断日志路径。留空则只写宿主 logger。",
+    "katexPath": "指定用于判定的 KaTeX 位置；默认按 profile 自动解析。",
+    "macros": "传给渲染器的宏，用于与客户端行为保持一致。"
+  }
+}

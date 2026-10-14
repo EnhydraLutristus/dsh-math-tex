@@ -1,0 +1,5 @@
+# math-guard bundle patch — mounts the host half.
+# The id must be globally unique; `name` resolves to this package's main entry.
+- insert:
+    - id: math-guard
+      name: 'math-guard'
