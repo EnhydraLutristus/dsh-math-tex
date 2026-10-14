@@ -1,0 +1,14 @@
+# Nothing generated belongs in the package: the plugin ships lib/, locale/, tools/, docs/ and the
+# manifest, all of which are hand-written and versioned.
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
+
+# Local scratch: mounted-copy experiments, ad-hoc probes, editor state.
+.tmp/
+.tools/
+.vscode/
+.idea/
+*.bak
+*.bak-*
