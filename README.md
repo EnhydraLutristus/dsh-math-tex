@@ -1,56 +1,144 @@
-# dsh-math-tex — 让 DSH 的数学回答不再变成一片红字
+# dsh-math-tex
 
-这个仓库有两部分：**一个问题**（DSH 渲染数学时把源码红字吐到屏幕上）和**一个插件**（在文本落盘之前把这个问题拦掉）。`math-typeset/` 是同一时期另一件数学核对工作的完整记录，一并保留。
+让 DSH 的数学回答始终可读：给模型一套排版规则，再在文本落盘之前拦截并修好每一个会被渲染成红字的公式区域。
+
+这是一个 host 侧插件，**没有客户端部分**——渲染器改不了，所以修复发生在文本还属于我们的最后一刻。
 
 ---
 
-## 问题是什么
+## 它解决什么问题
 
-在 DSH 里贴一段较长的推导，屏幕有时会变成一大片红色 LaTeX 源码。没有崩溃、没有日志、没有报错——只是**渲染器拒绝了这段数学，转而把原始源码画了出来**。
+DSH 的对话渲染用 KaTeX 渲染 Markdown 数学，只要遇到它解析不了的东西，就把**原始源码**用 KaTeX 的错误色 `#cc0000` 直接吐到屏幕上。**没有崩溃，也没有日志**：一个位置不对的 `$$` 足以让整篇推导变成"一片血红"，而用户只会看到一片红字，不知道哪一步错了、也不知道原因。
 
-追下去发现三件事：
+前端是 `app.asar` 里的一个整体 bundle，给 KaTeX 传的选项是空的（没有 `errorColor`、没有 `maxExpand`、没有 `trust`），所以**事后无法配置**。文本一旦落盘，屏幕上和会话记录里就都是坏的。
 
-1. **不是崩溃。** 宿主崩溃日志里只有 `STATUS_CONTROL_C_EXIT`（正常退出），没有任何渲染进程故障。红字是**设计好的降级路径**。
-2. **判据不是"有没有抛异常"。** 渲染链是三段：严格调用 → 宽松调用 → 红色 span 兜底。实测宽松段并不"静默画错"，它同样用错误色 `#cc0000` 把错误画出来；更麻烦的是 `\htmlClass{red}{x}` 这类被禁用的扩展命令**严格调用是成功的**，输出里仍然带错误色。只看异常的实现会把这块判成健康。
-3. **前端改不了。** KaTeX 内联在 `app.asar` 内的一个整体 bundle 里，渲染器不传任何 KaTeX 选项（没有 `errorColor`、没有 `maxExpand`、没有 `trust`），客户端所有 slot 里也没有一个与数学相关。所以修复必须发生在**文本落盘之前**——那是唯一能同时影响屏幕、会话记录和上下文压缩的位置。
+`dsh-math-tex` 因此在文本落盘之前动手。
 
-## 插件做了什么
-
-`plugin-design/dsh-math-tex/` 是一个 host 侧 DSH 插件（无客户端部分），装两道防线：
+## 两道防线
 
 | | 机制 | 作用 |
 | --- | --- | --- |
-| 预防 | `systemPrompt.section` | 注入排版规则：行间公式单独成段、一个 `$$` 块只放一个公式、块内不得有标题或正文、标题不得与公式同行 |
-| 兜底 | `llm/stream` waterfall | 用**客户端同版本 KaTeX** 判定每个数学区域，修掉会被渲染成红色的那些 |
+| 1 | `systemPrompt.section` | 事前规则：行间公式单独成段、`$$` 内只有公式、标题不粘公式……让模型少犯这个错 |
+| 2 | `llm/stream` waterfall | 兜底：用**客户端同版本**的 KaTeX 逐个区域判定，把会渲染成红色的区域改写掉，然后才落盘 |
 
-修复只做两种有确定语义的改动（去掉渲染器不认识的命令的反斜杠、给重复算子重新分组），改完必须重新渲染验证"严格通过且无红色"才接受；结构性损坏降级成带围栏的源码块。**数学永不删除，修复永不编造。**
+第 2 道是关键：`llm/stream` 是每一次流式模型调用外面的 waterfall，改写过的 chunk 会同时进入持久化的消息体、实时前端帧和上下文压缩，所以**屏幕和记录一起修好**。
 
-```powershell
-cd plugin-design/dsh-math-tex
-npm test                     # 8 个测试文件，517 条断言
-node ../../install.mjs       # 装进 desktop profile 并登记为 bundle
+## 判定不是正则，是问渲染器
+
+直觉上的启发式（公式太长、嵌套太深、用了重型宏）经实测**两个方向都会错**：300 字符的公式、8 层 `\underbrace`、`\substack`、公式里的中文都渲染正常，而一个 99 字符的公式却死了。
+
+更麻烦的是，"渲染器抛没抛异常"也不是判据：
+
+| 输入 | 第 1 段调用（严格） | 第 2 段调用（宽松） | 读者看到 |
+| --- | --- | --- | --- |
+| `\foobar{x}` | 抛错 | 不抛错，把 `\foobar` 用 `#cc0000` 画出来 | 红字 |
+| `x_1_2`（双下标） | 抛错 | 不抛错 | 红字 |
+| `\htmlClass{red}{x}` | **成功** | — | **红字** |
+
+第三行是最阴的一种：严格调用完全成功，输出里却带错误色。**只看异常的实现会把它判成健康。** 所以判定看的是**渲染产物里有没有错误色**。
+
+## 修复原则：不猜数学
+
+一个区域会被渲染成红色时，按顺序尝试：
+
+1. **重新排版**——公式本身没问题、只是框架错了（例如 `$$` 开在段落中间），改成规范的 `$$\n…\n$$` 块；
+2. **定点施救**——只在两种有确定语义的情况下动：删掉渲染器不认识的命令的反斜杠（`\foobar` → `foobar`），或给重复的算子重新分组（`x_1_2` → `x_{1_2}`）。改完必须**重新渲染验证"严格通过且无红色"**才接受，所以永远不会出现"改一下只是把错误挪了个位置"的循环；
+3. **源码围栏**——修不了的（括号不闭合、`\begin` 没有 `\end`）作为一个代码块原样给出。
+
+**数学永远不会被删掉。** 最坏情况是读者看到公式源码（可复制、可恢复），而不是红字。猜结构性损坏等于替作者编造数学，这件事不做。
+
+## 安装
+
+```bash
+node tools/install.mjs              # 复制到 profile 并注册 bundle
+node tools/install.mjs --dry-run    # 只说会改什么
+node tools/install.mjs --uninstall  # 从 bundle 列表移除
 ```
 
-细节见 [plugin-design/dsh-math-tex/README.md](plugin-design/dsh-math-tex/README.md)，设计取舍见 [plugin-design/DESIGN.md](plugin-design/DESIGN.md)，当前状态与"还没证明什么"见 [plugin-design/STATUS.md](plugin-design/STATUS.md)。
+装完**必须开新会话**：bundle 栈是会话的 runner 进程启动时读的，当前会话不会重新加载。
 
-## 仓库结构
+手工挂载也可以：把本包放进 `<profile>/node_modules/`，再把名字加进 profile `package.json` 的 `dsh.profile.bundles`。
+
+## 配置
+
+在 profile 的 `cordis.patch.yml` 里按 id 设置：
+
+```yaml
+- id: dsh-math-tex
+  name: dsh-math-tex
+  config:
+    repair: auto
+    logFile: C:/tmp/math-tex.log
+```
+
+| 选项 | 默认 | 说明 |
+| --- | --- | --- |
+| `enabled` | `true` | `false` 时两道防线都不挂载 |
+| `promptRules` | `full` | `full` / `minimal` / `off`，规则集大小 |
+| `repair` | `auto` | `auto` 改写 / `check-only` 只记日志不改写 / `off` 完全放行 |
+| `tailBuffer` | `15` | 最少扣住多少个字符，避免完成记号被逐字泄漏 |
+| `maxHold` | `600` | 单个未闭合区域最多等多少字符，超了就原样放行（宁可不管，不可卡住） |
+| `logFile` | `''` | 诊断日志路径；留空则只走 host logger |
+| `katexPath` | `''` | 指定 KaTeX 位置，默认自动按 profile 解析 |
+| `macros` | `{}` | 传给渲染器的宏，与客户端行为保持一致 |
+
+未知键**报错而不是静默忽略**——写错的选项看起来像生效了，比没有这个选项更糟。
+
+## 日志能证明它真的在工作
 
 ```
-plugin-design/
-  dsh-math-tex/        插件本体：lib/ + test/ + 文档 + 清单
-  STATUS.md            交接状态：装了什么、证明了什么、还差什么、踩过哪些坑
-  DESIGN.md            设计：为什么在 host 侧、为什么用渲染产物做判据
-  FINDINGS.md          证据链：渲染器实现、客户端服务目录、故障分类
-  install.mjs          安装器（复制 payload + 登记 bundle，幂等，带备份）
-math-typeset/
-  demo-wave.tex/.pdf   波动方程解析解与差分格式的核对报告
-  verify_wave.py       符号核对脚本
-  fig-*.png            对比图
+oracle: katex 0.16.47
+prompt section "math-output-format" registered (full)
+llm/stream hooked model=deepseek-flash mode=auto
+guarded stream: 214 text delta(s) in, 231 out
 ```
 
-## 已知边界
+最后一行是**真实回合**的判据：`in` 必须远大于 1（自测喂的假流是 1）。
 
-- 渲染器不可修改，这是设计前提，不是待办事项。
-- 仅 host 侧：唯一的拦截点是 `llm/stream`。
-- 打开但未闭合的 `$$` 会吞掉后续正文——那是 Markdown 解析行为，不属于可修复的公式区域。
-- 真实会话里的钩子调用证据需要一次现场运行：`node plugin-design/dsh-math-tex/tools/verify-live.mjs`（STATUS.md §5 说明了判据）。
+## 测试
+
+```bash
+npm test
+```
+
+| 文件 | 测什么 | 断言 |
+| --- | --- | --- |
+| `guard-test` | 判定与区域切分是否和渲染器一致 | 39 |
+| `red-render-test` | 三类红字是否都能抓到 | 48 |
+| `e2e-test` | 真实事故文本端到端是否可读 | 39 |
+| `wire-test` | 流式输出是否等于整篇修复 | 97 |
+| `fuzz-test` | 该性质在 236 种任意切分下是否成立 | 236 |
+| `config-test` | 每个文档化选项是否真的有效 | 26 |
+| `smoke-test` | 包是否按宿主的加载方式加载 | 22 |
+| `installed-test` | profile 里那份**安装副本**（不是源码目录）能否加载并自修 | 10 |
+
+最有说服力的是 `fuzz-test`：它要求**真实事故文本的任意切分**（1 字符一帧到 1600 字符一帧，外加随机切分）最终都重组为**逐字相同**的整篇修复结果。
+
+### 关于 `test/fixtures/real-broken.txt`
+
+这份夹具复刻的是**事故文本的结构**（同一批缺陷形态：段落中间的 `$$` 配错对、`##` 粘在行间公式里、未闭合的 `\begin`、结尾的代码围栏），内容已替换为与具体题目无关的通用推导，因此它测的是缺陷形态而不是任何一次具体事故。
+
+想直接看一份文本是怎么被判定的：
+
+```bash
+node tools/inspect-fixture.mjs                    # 默认检查上面这份夹具
+node tools/inspect-fixture.mjs path/to/text.md    # 换成任何一份文本
+```
+
+它会打印区域数量、被标记的区域及其原因、修复动作，以及修复后是否还有区域会被渲染成红色。
+
+## 设计边界
+
+- **渲染器不可改**：这是设计前提，不是让步。前端是打包好的 bundle，没有数学相关的 slot 可以替换。
+- **只做 host 侧**：唯一能同时影响屏幕、会话记录和压缩的拦截点在 `llm/stream`。
+- **宁可不管，不可卡住**：所有等待都有界（`maxHold`），超限即原样放行——那正是没有插件时的行为，因此安全。
+- **不改写非数学文本**：不含 `$` 和 `\` 的文本逐字节直通。
+
+## 文档
+
+- `STATUS.md`——现在装了什么、证明了什么、还差什么（交接用）。
+- `docs/`——判据的来源：`FINDINGS.md`（到底坏在哪）、`KATEX-MEASUREMENTS.md`（逐个用例的实测数字）、`DESIGN.md`（方案怎么定的、否掉了什么）。
+
+## License
+
+MIT
