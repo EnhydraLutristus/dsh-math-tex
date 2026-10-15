@@ -15,7 +15,7 @@
 
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import zlib from 'node:zlib'
+import { readSessionRecords } from './zstd-frames.mjs'
 import { dshHome, sessionsRoot, findSession } from './sessions.mjs'
 import * as plugin from '../lib/index.js'
 
@@ -31,30 +31,7 @@ if (!found) {
 
 /* --- decode the zstd-framed transcript ---------------------------------- */
 
-function records(file) {
-  const buf = readFileSync(file)
-  const out = []
-  for (let pos = 0; pos < buf.length - 3; pos += 1) {
-    if (buf[pos] !== 0x28 || buf[pos + 1] !== 0xb5 || buf[pos + 2] !== 0x2f || buf[pos + 3] !== 0xfd) continue
-    let text
-    try {
-      text = zlib.zstdDecompressSync(buf.subarray(pos)).toString('utf8')
-    } catch {
-      continue
-    }
-    for (const line of text.split('\n')) {
-      if (!line.trim()) continue
-      try {
-        out.push(JSON.parse(line))
-      } catch {
-        // a partial line at a frame boundary; the record appears in the next frame
-      }
-    }
-  }
-  const bySeq = new Map()
-  for (const r of out) if (r && r.seq !== undefined) bySeq.set(r.seq, r)
-  return [...bySeq.values()]
-}
+const records = readSessionRecords
 
 const textOf = (r) => (r.data?.message?.content ?? []).filter((b) => b.type === 'text').map((b) => b.text).join('\n')
 

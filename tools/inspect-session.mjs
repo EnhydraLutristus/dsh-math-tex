@@ -14,9 +14,9 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
-import zlib from 'node:zlib'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { dirname, join } from 'node:path'
+import { readSessionRecords } from './zstd-frames.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const { findMathRegions, inspect, repairText, judge, echoesError, loadOracle } = await import(
@@ -65,28 +65,7 @@ if (!hit) {
   process.exit(1)
 }
 
-const buf = fs.readFileSync(hit.file)
-const bySeq = new Map()
-for (let pos = 0; pos < buf.length - 3; pos++) {
-  if (!buf.subarray(pos, pos + 4).equals(MAGIC)) continue
-  try {
-    const text = zlib.zstdDecompressSync(buf.subarray(pos)).toString('utf8')
-    for (const line of text.split('\n')) {
-      if (!line.trim().startsWith('{')) continue
-      let o
-      try {
-        o = JSON.parse(line)
-      } catch {
-        continue
-      }
-      if (typeof o.seq === 'number') bySeq.set(o.seq, o)
-    }
-    pos += 3
-  } catch {
-    /* not a frame boundary */
-  }
-}
-const records = [...bySeq.values()].sort((a, b) => a.seq - b.seq)
+const records = readSessionRecords(hit.file)
 console.log(`session ${hit.id}  records ${records.length}\n`)
 
 const blocksOf = (r) => (r.data?.message?.content ?? []).filter((b) => b.type === 'text').map((b) => b.text)

@@ -11,9 +11,9 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
-import zlib from 'node:zlib'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { dirname, join } from 'node:path'
+import { readSessionRecords } from './zstd-frames.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const lib = await import(pathToFileURL(join(here, '..', 'lib', 'tex-repair.js')).href)
@@ -55,29 +55,7 @@ if (!hit) {
   process.exit(1)
 }
 
-const buf = fs.readFileSync(hit.file)
-const bySeq = new Map()
-for (let pos = 0; pos < buf.length - 3; pos++) {
-  if (!buf.subarray(pos, pos + 4).equals(MAGIC)) continue
-  try {
-    const text = zlib.zstdDecompressSync(buf.subarray(pos)).toString('utf8')
-    for (const line of text.split('\n')) {
-      if (!line.trim().startsWith('{')) continue
-      let o
-      try {
-        o = JSON.parse(line)
-      } catch {
-        continue
-      }
-      if (typeof o.seq === 'number') bySeq.set(o.seq, o)
-    }
-    pos += 3
-  } catch {
-    /* not a frame boundary */
-  }
-}
-
-const rec = bySeq.get(seqWanted)
+const rec = readSessionRecords(hit.file).find((r) => r.seq === seqWanted)
 if (!rec) {
   console.error(`no record with seq ${seqWanted}`)
   process.exit(1)

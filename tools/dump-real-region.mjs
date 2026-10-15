@@ -4,9 +4,9 @@
 // RUN: node tools/dump-real-region.mjs [sessionId]     (no argument = newest session)
 import fs from 'node:fs'
 import path from 'node:path'
-import zlib from 'node:zlib'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { dirname, join } from 'node:path'
+import { readSessionRecords } from './zstd-frames.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const { findSession, sessionsRoot } = await import(pathToFileURL(join(here, 'sessions.mjs')).href)
@@ -19,28 +19,7 @@ if (!found) {
 }
 console.log(`# ${found.sessionId}  (${found.workspace})\n`)
 
-const buf = fs.readFileSync(found.file)
-const MAGIC = Buffer.from([0x28, 0xb5, 0x2f, 0xfd])
-const bySeq = new Map()
-for (let p = 0; p < buf.length - 3; p++) {
-  if (!buf.subarray(p, p + 4).equals(MAGIC)) continue
-  try {
-    const t = zlib.zstdDecompressSync(buf.subarray(p)).toString('utf8')
-    for (const line of t.split('\n')) {
-      if (!line.trim().startsWith('{')) continue
-      let o
-      try {
-        o = JSON.parse(line)
-      } catch {
-        continue
-      }
-      if (typeof o.seq === 'number') bySeq.set(o.seq, o)
-    }
-    p += 3
-  } catch {
-    /* not a frame boundary */
-  }
-}
+const bySeq = new Map(readSessionRecords(found.file).map((r) => [r.seq, r]))
 
 const needles = [
   { seq: 626, needle: '是闭 1-形式', label: 'inner-delimiter-inside-text' },
