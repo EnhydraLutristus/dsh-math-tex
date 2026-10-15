@@ -160,25 +160,41 @@ parsed.dsh = parsed.dsh ?? {}
 parsed.dsh.profile = parsed.dsh.profile ?? {}
 const bundles = parsed.dsh.profile.bundles ?? []
 const has = bundles.includes(pkgName)
+const deps = parsed.dependencies ?? {}
+const declared = deps[pkgName]
 
-if (uninstall ? !has : has) {
-  console.log(`\nbundle list already ${uninstall ? 'without' : 'with'} ${pkgName} — nothing to change there`)
+// Registering the bundle and keeping the dependency entry in step are two separate edits, and
+// the second one is not conditional on the first. Measured failure that made them independent:
+// the bundle was already listed while the dependency still said 1.0.0 after the package went to
+// 1.1.0, because the old code only wrote the version on the run that added the name to
+// `dsh.profile.bundles`. The host then had `dsh-math-tex@1.0.0` declared and 1.1.0 on disk.
+const bundleChanged = uninstall ? has : !has
+// The profile installs the code this script just copied, so the declaration is the exact
+// version that was copied, never a range: declared and installed must not be able to drift.
+const depsChanged = uninstall ? pkgName in deps : declared !== manifest.version
+
+if (!bundleChanged && !depsChanged) {
+  console.log(`\nbundle list and dependency entry already correct for ${pkgName}@${manifest.version}`)
 } else {
   const backup = `${pkgPath}.bak-${pkgName}`
   if (!dryRun) fs.copyFileSync(pkgPath, backup)
-  parsed.dsh.profile.bundles = uninstall
-    ? bundles.filter((b) => b !== pkgName)
-    : [...bundles, pkgName]
-  // Keep the dependency entry in step with the bundle list: a name in `bundles` that is not
-  // installed as a dependency resolves from nothing on a fresh profile.
-  const deps = parsed.dependencies ?? {}
-  if (uninstall) delete deps[pkgName]
-  else deps[pkgName] = manifest.version ?? '0.0.1'
-  parsed.dependencies = deps
+  if (bundleChanged) {
+    parsed.dsh.profile.bundles = uninstall
+      ? bundles.filter((b) => b !== pkgName)
+      : [...bundles, pkgName]
+  }
+  if (depsChanged) {
+    if (uninstall) delete deps[pkgName]
+    else deps[pkgName] = manifest.version ?? '0.0.1'
+    parsed.dependencies = deps
+  }
   const next = `${JSON.stringify(parsed, null, 2)}\n`
   JSON.parse(next) // belt and braces: never write unparsable JSON
   if (!dryRun) fs.writeFileSync(pkgPath, next, 'utf8')
-  console.log(`${dryRun ? 'would ' : ''}${uninstall ? 'unregister' : 'register'} ${pkgName}@${manifest.version} (backup: ${path.basename(backup)})`)
+  const what = [bundleChanged ? (uninstall ? 'unregister bundle' : 'register bundle') : null,
+    depsChanged ? `dependencies: ${declared ?? '(absent)'} -> ${uninstall ? '(removed)' : manifest.version}` : null]
+    .filter(Boolean).join('; ')
+  console.log(`${dryRun ? 'would ' : ''}${what} (backup: ${path.basename(backup)})`)
 }
 
 // --- 3. report -------------------------------------------------------------
