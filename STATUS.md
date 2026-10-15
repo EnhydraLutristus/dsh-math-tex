@@ -1,6 +1,6 @@
 # dsh-math-tex — 当前状态（可交接）
 
-包名 `dsh-math-tex` 1.1.0。**仓库根目录就是包根目录**（checkout 在
+包名 `dsh-math-tex` 1.2.0。**仓库根目录就是包根目录**（checkout 在
 `default-workspace\dsh-math-tex\`，workspace 里现在只剩这一个项目，其余全在
 `default-workspace\_archive\`）。装到
 `%USERPROFILE%\.dsh\profiles\desktop\node_modules\dsh-math-tex\`，
@@ -121,12 +121,12 @@ TLS 校验照样通过（`curl --resolve` 返回 404 而非 TLS 错误，证明�
 | `test/regression-test.mjs` | 23 | 已经发生过的缺陷不许复发（用例逐字引自真实会话记录） |
 | `test/red-render-test.mjs` | 97 | 三类红（异常 / 无异常但带红 / 围栏内）都要被发现 |
 | `test/fuzz-test.mjs` | 236 | 随机切分 + 随机损坏，不变量：任何切法都不留下红区 |
-| `test/config-test.mjs` | 26 | 选项解析与手写校验 |
+| `test/config-test.mjs` | 29 | 选项解析与手写校验；**以及 loader 真正读的那个 `Config` 导出** |
 | `test/smoke-test.mjs` | 22 | 挂载、再导出、日志、提示词段已注册 |
-| `test/installed-test.mjs` | 10 | 装到 profile 的那份与源码一致、且真能用 |
+| `test/installed-test.mjs` | 11 | 装到 profile 的那份与源码一致、且真能用 |
 | `test/katex.mjs` | — | oracle 自检：bundle 存在、hash 对、版本对 |
 
-合计 **9 个文件、540 条断言**，`npm test` 约 4 秒，全程不需要网络。
+合计 **9 个文件、544 条断言**，`npm test` 约 4 秒，全程不需要网络。
 
 ## 5. 真实会话里的两次事故（都已被回归测试钉住）
 
@@ -149,7 +149,33 @@ TLS 校验照样通过（`curl --resolve` 返回 404 而非 TLS 错误，证明�
 把本节两条真实文本跑一遍，要求没有任何区域会渲染成红色（并且真缺陷仍然被抓住、
 仍然被修干净）。把修复回退掉，这个文件会红 4 条。
 
-## 6. 还没证明的一件事
+## 6. 曾经"明明装好了却不工作"的那个原因（已修，1.2.0）
+
+插件在插件列表里显示**异常（failed）**，日志文件永远不出现——`apply` 一次都没被调用过。
+不是环境问题，是这个包自己的 `Config` 导出违反了 cordis 的约定：
+
+cordis 解析一个 entry 的配置走 `resolveConfig(runtime, config)`，里面是
+`runtime.Config['~standard'].validate(config)`（cordis `lib/index.js:956-962`）。我们的
+`Config` 原来是一个**普通 JSON Schema 对象**，没有 `~standard`，于是那一行抛
+`TypeError: Cannot read properties of undefined (reading 'validate')`。异常发生在 fiber 的
+`_reload()` 里，被它捕获、存进 `_error`、把 fiber 标成 FAILED——**插件在 `apply` 之前就死了**。
+所以：
+
+- `apply` 里写日志那段代码根本没跑到，"日志文件不存在"是必然的；
+- 插件清单接口只暴露 `fiberPhase`，不带失败原因，所以从界面上永远查不到为什么；
+- 反证：把同一个 `Config` 交给同一段解析逻辑，`TypeError` 每次复现（`tools/verify-config-schema.mjs` 现在把这条路钉住了）。
+
+**修法**：`Config` 改成原生 Schemastery schema（`lib/config.js` 的 `loadSchemastery()` +
+`buildConfig()`），从 `DEFAULTS` 和同一份描述生成，所以两套声明不会各自漂移。Schemastery
+按安装目录解析（`<profile>/node_modules`，宿主本来就放在那里），**取不到时不导出 `Config`**——
+这时加载器会认为"这个插件没有配置 schema"，profile 里的 `config:` 块照样作为 `apply` 的第二个
+参数传进来，插件仍然能跑。宁可少一个配置界面，也不要一个起不来的 fiber。
+`package.json` 加了 `@deepseek-ai/schemastery` 的可选 peer（和 `dshmarket` 一致）。
+
+教训只有一句：**"插件代码看起来没问题"和"插件真的在跑"是两件事**——判定它们的是加载器，
+所以契约要照着加载器的实现写，而不是照着"看起来合理"写。
+
+## 7. 还没证明的一件事
 
 **还没有在真实会话里亲眼看到它救回一次事故。** 已证明的是：宿主确实会加载并改写流
 （挂载日志、`llm/stream` 钩子、哨兵），判定用的是同一个渲染器，540 条断言离线全绿。
@@ -162,7 +188,7 @@ TLS 校验照样通过（`curl --resolve` 返回 404 而非 TLS 错误，证明�
 记录可以直接用 `node tools/find-red-session.mjs` 复查：它按渲染器判定扫所有会话，
 报告还有哪些回答会渲染成红色。
 
-## 7. 踩过的坑（别重复）
+## 8. 踩过的坑（别重复）
 
 - **别用正则改 profile 的 `package.json`**：`$1,` 曾把逗号写到错误的块里，产出非法
   JSON，差点让 profile 起不来，只能从备份恢复。一切走 JSON 解析并留备份。
@@ -174,6 +200,13 @@ TLS 校验照样通过（`curl --resolve` 返回 404 而非 TLS 错误，证明�
   插件到底加没加载。
 - **`plugins.install` 走 npm registry**，离线机器上装不了本地目录；本地插件只能在
   profile 的 `node_modules/` 里挂载。
+- **`Config` 必须是加载器认的那种 schema**：普通 JSON Schema 会让
+  `runtime.Config['~standard'].validate()` 抛 TypeError，fiber 当场 FAILED，`apply` 永远
+  不会被调用（1.2.0 修的，见第 6 节）。判定契约要读加载器的实现，别照着"看起来合理"写。
+- **`fiberPhase` 是唯一能看到的信号，而它不含原因**：插件清单接口只给状态不给错误，
+  所以排查时只能靠插件自己落盘。`apply` 现在无条件写
+  `dsh-math-tex-trace.txt`，异常写 `dsh-math-tex-apply-error.txt`——这两个文件是"为什么
+  没起来"唯一的外部证据。
 - **改完插件必须开新会话**：bundle 栈是会话 runner 进程启动时读的，当前会话不会重载。
 - **Node 会缓存已解析的模块**：同一个包名改完内容，正在跑的宿主可能仍用旧模块；
   判断"到底跑的是哪份代码"要在新会话里重新验证，别信 PID 没变就以为没重载。

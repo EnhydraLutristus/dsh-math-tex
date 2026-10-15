@@ -329,6 +329,43 @@ console.log('\nlog file\n')
   })
 }
 
+/* The export the LOADER reads, not the plugin: this is the one that decides whether the
+ * fiber starts at all.
+ *
+ * cordis resolves an entry's config as `runtime.Config['~standard'].validate(config)`
+ * (cordis `lib/index.js:956-962`). A plain JSON-Schema object has no `~standard`, so that
+ * line throws `TypeError: Cannot read properties of undefined (reading 'validate')` inside
+ * the fiber's `_reload()`, which catches it and marks the fiber FAILED. The plugin then
+ * appears in the inventory as "异常/failed" and its `apply` is never called — no log, no
+ * prompt section, no listener. Every assertion below is one measured piece of that failure.
+ */
+{
+  const { Config } = await load(join(pkgRoot, 'lib', 'config.js'))
+  if (Config === undefined) {
+    /* Legitimate on a machine with no Schemastery to build it from (see `loadSchemastery`);
+     * the installed copy is checked unconditionally in `installed-test.mjs`. */
+    console.log('  skip  Config export (no Schemastery resolvable from this checkout)')
+  } else {
+    check('Config is a native Schemastery schema', () => {
+      assert.equal(Reflect.get(Config, Symbol.for('schemastery')), true)
+      assert.equal(typeof Reflect.get(Config, 'type'), 'string')
+      assert.equal(typeof Reflect.get(Config, 'meta'), 'object')
+    })
+    check('the loader can resolve a config against it', () => {
+      const result = Config['~standard'].validate({ logFile: 'x.log' })
+      assert.ok(!result.issues, `unexpected issues: ${JSON.stringify(result.issues)}`)
+      assert.equal(result.value.logFile, 'x.log')
+      assert.equal(result.value.tailBuffer, DEFAULTS.tailBuffer)
+    })
+    check('the loader schema defaults still match DEFAULTS', () => {
+      const filled = Config['~standard'].validate({}).value
+      for (const [key, value] of Object.entries(DEFAULTS)) {
+        assert.deepEqual(filled[key], value, `${key} default drifted from DEFAULTS`)
+      }
+    })
+  }
+}
+
 console.log(`\n=== CONFIG RESULT: ${pass} passed, ${fail} failed ===`)
 if (fail > 0) process.exitCode = 1
 void guardStream

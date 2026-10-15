@@ -110,6 +110,17 @@ check('the installed entry still exports the whole documented surface', () => {
   }
 })
 
+check('the installed Config is one the loader can actually resolve', () => {
+  /* Unconditional here, unlike in config-test: the installed copy resolves Schemastery from
+   * the profile it sits in, so there is no second state to allow for. See config-test.mjs
+   * for why a plain JSON Schema object here is fatal rather than cosmetic. */
+  const Config = installed.Config
+  assert.equal(typeof Config, 'function', `Config is ${typeof Config}, not a native schema`)
+  assert.equal(Reflect.get(Config, Symbol.for('schemastery')), true, 'missing the Schemastery marker')
+  const result = Config['~standard'].validate({})
+  assert.ok(!result.issues, `the loader's resolution would fail: ${JSON.stringify(result.issues)}`)
+})
+
 check('the token the guard strips is the one the prompt asks for', () => {
   assert.ok(installed.TOKEN === TOKEN, `installed TOKEN ${installed.TOKEN} differs from source ${TOKEN}`)
 })

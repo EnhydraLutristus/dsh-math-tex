@@ -2,6 +2,39 @@
 
 本文件记录每个版本的**可观察行为**变化。格式参考 Keep a Changelog，版本号遵循语义化版本。
 
+## [1.2.0] — 2026-10-15
+
+### 修复
+
+- **插件此前从未真正运行过：`Config` 导出不合加载器的约定。** 表现是插件列表里显示
+  **异常（failed）**、日志文件永远不出现，而 `apply` 一次都没被调用。原因不在插件逻辑里：
+  cordis 解析 entry 配置走 `resolveConfig(runtime, config)`，实现是
+  `runtime.Config['~standard'].validate(config)`（cordis `lib/index.js:956-962`）。原来的
+  `Config` 是普通 JSON Schema 对象，没有 `~standard`，那一行抛
+  `TypeError: Cannot read properties of undefined (reading 'validate')`；异常在 fiber 的
+  `_reload()` 里被捕获、存进 `_error`，fiber 直接变成 FAILED——**在 `apply` 之前就死了**。
+  现在 `Config` 是由 `@deepseek-ai/schemastery` 构建的原生 schema，选项与描述都从同一份
+  `DEFAULTS` 生成，两套声明不会各自漂移。**行为上唯一的区别是插件真的会加载。**
+- **取不到 Schemastery 时不导出 `Config`**，而不是退回旧的普通对象：加载器会认为这个插件
+  没有配置 schema，profile 里的 `config:` 块仍然作为 `apply` 的第二个参数传进来，插件照常
+  工作；少一个配置界面，好过一个起不来的 fiber。`package.json` 相应加了
+  `@deepseek-ai/schemastery` 的可选 peer 依赖（与 `dshmarket` 的做法一致）。
+- **挂载失败留下可查的证据**：`apply` 无条件写 `dsh-math-tex-trace.txt`，异常连同堆栈写
+  `dsh-math-tex-apply-error.txt`。插件清单接口只暴露 `fiberPhase`、不带失败原因，宿主也不落
+  盘 runner 日志，所以在这之前"插件为什么没起来"在系统里没有任何外部证据。
+
+### 新增
+
+- `test/config-test.mjs` 与 `test/installed-test.mjs` 各增加一组断言，钉住加载器读取的
+  `Config` 契约（原生 schema 标记、`~standard.validate()`、默认值与 `DEFAULTS` 一致）。
+- `tools/verify-config-schema.mjs`：对着已安装的那份入口，独立验证"加载器能解析这个插件的
+  配置"，把这次事故的成因变成一条可重跑的命令。
+- `tools/diagnose-mount.mjs`：把已安装入口挂到记录型假 ctx 上，打印 ctx 访问顺序和异常。
+
+### 变更
+
+- 断言总数 540 → 544（`config-test` 26→29，`installed-test` 10→11）。
+
 ## [1.1.0] — 2026-10-14
 
 ### 变更
@@ -93,5 +126,6 @@
 - 仅 host 侧：唯一能同时影响屏幕、记录与压缩的拦截点是 `llm/stream`。
 - 打开但未闭合的 `$$` 会吞掉后续正文，这属于 Markdown 解析行为，不属于可修复的公式区域。
 
+[1.2.0]: https://github.com/EnhydraLutristus/dsh-math-tex/releases/tag/v1.2.0
 [1.1.0]: https://github.com/EnhydraLutristus/dsh-math-tex/releases/tag/v1.1.0
 [1.0.0]: https://github.com/EnhydraLutristus/dsh-math-tex/releases/tag/v1.0.0

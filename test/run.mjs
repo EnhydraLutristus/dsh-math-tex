@@ -18,8 +18,37 @@
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import { existsSync, mkdirSync, symlinkSync } from 'node:fs'
 
 const here = dirname(fileURLToPath(import.meta.url))
+
+/**
+ * Make the host's Schemastery resolvable from this checkout, the same way it is resolvable
+ * from the installed copy.
+ *
+ * `lib/config.js` builds its `Config` export from Schemastery, and it resolves the package
+ * relative to itself — from the profile's `node_modules` when the plugin is installed, but
+ * from the repository when the tests run here, where nothing provides it. A link mirrors
+ * what the profile already has, so the suite tests the same code path the host does instead
+ * of a degraded one.
+ *
+ * Best effort: no profile on this machine (a contributor's first checkout) just means the
+ * suite runs with `Config` undefined, which is itself a supported state.
+ */
+function linkSchemastery() {
+  const dshHome = process.env.DSH_HOME ?? join(process.env.USERPROFILE ?? process.env.HOME ?? '', '.dsh')
+  const source = join(dshHome, 'profiles', 'desktop', 'node_modules', '@deepseek-ai', 'schemastery')
+  const link = join(here, '..', 'node_modules', '@deepseek-ai', 'schemastery')
+  if (existsSync(link) || !existsSync(source)) return
+  try {
+    mkdirSync(dirname(link), { recursive: true })
+    symlinkSync(source, link, 'junction')
+  } catch {
+    // a link we cannot create is not a test failure; the schema degrades to undefined
+  }
+}
+linkSchemastery()
+
 const SUITE = [
   'guard-test.mjs',
   'red-render-test.mjs',
