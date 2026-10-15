@@ -132,16 +132,23 @@ npm test
 | `e2e-test` | does the real incident come out readable end to end? | 39 |
 | `wire-test` | does the streamed output equal the whole-text repair? | 97 |
 | `fuzz-test` | does that hold under 236 arbitrary chunkings? | 236 |
-| `config-test` | does every documented option actually do something? | 26 |
+| `config-test` | does every documented option actually do something? | 29 |
 | `smoke-test` | does the package load the way the host loads it? | 22 |
-| `installed-test` | can the **installed copy** in the profile (not the source tree) load and repair? | 10 |
+| `installed-test` | can the **installed copy** in the profile (not the source tree) load and repair? | 11 |
 | `regression-test` | do fixed defects stay fixed? (cases quoted verbatim from real sessions) | 23 |
+| `live-path-test` | **acceptance**: installed copy + the profile's real config + the host's mount path — does a broken answer actually become clean text? | 22 |
 
-540 assertions across 9 files, about 4 seconds, no network.
+566 assertions across 10 files, about 4 seconds, no network.
 
 `fuzz-test` is the strongest instrument: it requires **any** chunking of the real incident —
 one character per frame up to 1600, plus random splittings — to reassemble byte-identically
 to the single-pass repair.
+
+`live-path-test` is the only file that joins the installed copy, the profile's configuration,
+the host's mount path and a real delta stream into one measurement. Every case runs twice: with
+the repairer off the defect must reach the reader unchanged, with it on the same defect must
+disappear — the first arm is what makes the second one mean anything, since a case that was
+never broken would otherwise "pass".
 
 `regression-test` is the only file whose assertion is about the **emitted text** rendering
 without red; the others check the judge and the region structure. It is the last line of

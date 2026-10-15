@@ -30,10 +30,18 @@
 - `tools/verify-config-schema.mjs`：对着已安装的那份入口，独立验证"加载器能解析这个插件的
   配置"，把这次事故的成因变成一条可重跑的命令。
 - `tools/diagnose-mount.mjs`：把已安装入口挂到记录型假 ctx 上，打印 ctx 访问顺序和异常。
+- `tools/live-path-test.mjs`（已进套件，第 10 个文件）：**验收测试**。原有测试各自证明零件
+  是对的，没有一个证明"装好的那份、按 profile 的配置、走宿主挂载的那条路、喂真实增量流，
+  出来的文本在渲染器眼里是干净的"——插件恰恰就是在这段里空转了一辈子。每个用例跑两遍：
+  `repair: 'off'` 时缺陷必须原样到达读者（否则这个用例根本没坏，第二遍就没有意义），用
+  线上配置时同一个缺陷必须消失；同时校验结论与正文都还在、哨兵被去掉、日志里确实有
+  `repaired …` 那一行。实测三个原因各命中一处缺陷：`oracle-rejected`、
+  `mid-paragraph-display`、`unterminated`。
 
 ### 变更
 
-- 断言总数 540 → 544（`config-test` 26→29，`installed-test` 10→11）。
+- 断言总数 540 → **566**，10 个文件（`config-test` 26→29，`installed-test` 10→11，
+  新增 `live-path-test` 22）。
 
 ## [1.1.0] — 2026-10-14
 

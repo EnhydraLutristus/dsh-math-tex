@@ -23,13 +23,13 @@
 node tools/install.mjs                            # 复制 payload + 登记 bundle（幂等）
 node tools/install.mjs --dry-run                  # 只说会改什么
 node tools/install.mjs --uninstall dsh-math-tex   # 反安装（可指定别的包名）
-npm test                                          # 9 个测试文件，540 条断言
+npm test                                          # 10 个测试文件，566 条断言
 ```
 
 `tools/install.mjs` 里所有路径都由 `import.meta.url` 推出来，checkout 放在哪都能跑；
 profile 目录可用 `DSH_PROFILE_DIR` 覆盖。
 
-源码已推到私有仓库 **https://github.com/EnhydraLutristus/dsh-math-tex**（`main`）。
+源码已推到公开仓库 **https://github.com/EnhydraLutristus/dsh-math-tex**（`main`，MIT）。
 
 **在这台机器上跑 git 要用包装脚本** `<workspace>\.tools\git.ps1`（把参数原样传给 git）：
 
@@ -177,16 +177,26 @@ cordis 解析一个 entry 的配置走 `resolveConfig(runtime, config)`，里面
 
 ## 7. 还没证明的一件事
 
-**还没有在真实会话里亲眼看到它救回一次事故。** 已证明的是：宿主确实会加载并改写流
-（挂载日志、`llm/stream` 钩子、哨兵），判定用的是同一个渲染器，540 条断言离线全绿。
-未证明的是"某次真实回答正好命中红线并被就地修好"。
+**还没有在真实会话里亲眼看到它救回一次事故。** 已经证明的比上次多了一层：
 
-验证方法：**开一个新会话**（当前会话不会重载插件），让它写一段有缺陷的推导
-（`test/fixtures/real-broken.txt` 就是这种形状），然后看两处——
-`%USERPROFILE%\.dsh\profiles\desktop\dsh-math-tex.log` 里有没有
-`guarded stream: N text delta(s) in`（N 要远大于 1），以及会话记录里的文本是否已被改写。
-记录可以直接用 `node tools/find-red-session.mjs` 复查：它按渲染器判定扫所有会话，
-报告还有哪些回答会渲染成红色。
+- 宿主确实加载了它、并且确实改写了流：`fiberPhase` 由 `failed` 变 `active`，
+  `C:\Users\SuansDeTus\.dsh\profiles\desktop\dsh-math-tex.log` 里记着
+  `mounting BUILD=… / oracle: katex 0.16.47 / prompt section … registered / listener registered`，
+  以及真实回合的 `guarded stream: 11 text delta(s) in, 3 out`——**这条流被合并改写过了**。
+- `tools/live-path-test.mjs` 把"装好的副本 + profile 的真实配置 + 宿主的挂载路径 + 真实增量流"
+  接起来测过：5 类真实缺陷（双下标、段落中间的 `$$`、粘在公式里的 `##`、未闭合的 `$`、
+  未知控制序列）在关掉修复时**都会红**、开着时**都不红**，22 条断言全绿，日志里留下
+  `repaired 1 region(s): oracle-rejected / mid-paragraph-display / unterminated`。
+
+仍然没证明的是**"某次真实回答正好命中红线"**：那几次真实回合里 `repaired` 一行都没有，
+说明模型按提示词写对了格式、没有触发红线——这是好事，但它不等于"救回来过"。上一条是
+离线复现，不是临场证据。
+
+要拿到临场证据，**开一个新会话**（当前会话不会重载插件），让它写一段有缺陷的推导
+（`test/fixtures/real-broken.txt` 就是这种形状，也可以直接说"演示一下 `x_1_2` 这种双下标"），
+然后看两处——`%USERPROFILE%\.dsh\profiles\desktop\dsh-math-tex.log` 里有没有新的
+`repaired N region(s): …` 行，以及屏幕上那段是不是没有红字。事后可以用
+`node tools/find-red-session.mjs` 复查：它按渲染器判定扫所有会话，报告还有哪些回答会渲染成红色。
 
 ## 8. 踩过的坑（别重复）
 

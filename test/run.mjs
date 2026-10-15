@@ -1,6 +1,10 @@
 /**
  * Run the whole suite, in order of increasing blast radius.
  *
+ *   9. `installed-test`  — does the copy IN THE PROFILE load and behave the same way?
+ *  10. `live-path-test`  — mount the installed copy the way the host does, feed it broken
+ *      answers the way a turn does, and require the reader's text to come out clean.
+ *
  * Read the order as the argument for trusting the plugin:
  *   1. `guard-test`      — does the judge and the region scanner agree with the renderer?
  *   2. `red-render-test` — does it catch the three ways a region can turn red?
@@ -10,7 +14,6 @@
  *   6. `fuzz-test`       — does that hold under 236 arbitrary chunkings?
  *   7. `config-test`     — do the documented options do what they say?
  *   8. `smoke-test`      — does the package load the way the host loads it?
- *   9. `installed-test`  — does the copy IN THE PROFILE load and behave the same way?
  *
  * Exit code is non-zero if any file fails, so `npm test` is usable in CI.
  */
@@ -59,6 +62,7 @@ const SUITE = [
   'config-test.mjs',
   'smoke-test.mjs',
   'installed-test.mjs',
+  '../tools/live-path-test.mjs',
 ]
 
 let failed = 0
