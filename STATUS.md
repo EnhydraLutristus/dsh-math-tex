@@ -115,18 +115,19 @@ TLS 校验照样通过（`curl --resolve` 返回 404 而非 TLS 错误，证明�
 
 | 文件 | 断言 | 挡什么 |
 | --- | --- | --- |
-| `test/guard-test.mjs` | 39 | 流式分块的输出必须等于"整段一次修复"的结果；哨兵时刻 |
-| `test/wire-test.mjs` | 48 | 真实 DSH 会话里的线上形状 |
+| `test/guard-test.mjs` | 39 | 判定与区域切分必须和渲染器一致 |
+| `test/red-render-test.mjs` | 48 | 三类红（异常 / 无异常但带红 / 围栏内）都要被发现 |
 | `test/e2e-test.mjs` | 39 | 对**原始 KaTeX**逐个区域核对判定：修好的真不红，没修的仍然红 |
 | `test/regression-test.mjs` | 23 | 已经发生过的缺陷不许复发（用例逐字引自真实会话记录） |
-| `test/red-render-test.mjs` | 97 | 三类红（异常 / 无异常但带红 / 围栏内）都要被发现 |
+| `test/wire-test.mjs` | 97 | 真实 DSH 会话里的线上形状；流式输出等于"整段一次修复" |
 | `test/fuzz-test.mjs` | 236 | 随机切分 + 随机损坏，不变量：任何切法都不留下红区 |
 | `test/config-test.mjs` | 29 | 选项解析与手写校验；**以及 loader 真正读的那个 `Config` 导出** |
 | `test/smoke-test.mjs` | 22 | 挂载、再导出、日志、提示词段已注册 |
 | `test/installed-test.mjs` | 11 | 装到 profile 的那份与源码一致、且真能用 |
+| `tools/live-path-test.mjs` | 22 | **验收**：装好的副本 + profile 的真实配置 + 宿主的挂载路径，坏答案真的变成干净文本 |
 | `test/katex.mjs` | — | oracle 自检：bundle 存在、hash 对、版本对 |
 
-合计 **9 个文件、544 条断言**，`npm test` 约 4 秒，全程不需要网络。
+合计 **10 个文件、566 条断言**，`npm test` 约 4 秒，全程不需要网络。
 
 ## 5. 真实会话里的两次事故（都已被回归测试钉住）
 
