@@ -1,6 +1,6 @@
 # dsh-math-tex — 当前状态（可交接）
 
-包名 `dsh-math-tex` 1.2.0。**仓库根目录就是包根目录**（checkout 在
+包名 `dsh-math-tex` 1.2.1。**仓库根目录就是包根目录**（checkout 在
 `default-workspace\dsh-math-tex\`，workspace 里现在只剩这一个项目，其余全在
 `default-workspace\_archive\`）。装到
 `%USERPROFILE%\.dsh\profiles\desktop\node_modules\dsh-math-tex\`，
@@ -115,7 +115,7 @@ TLS 校验照样通过（`curl --resolve` 返回 404 而非 TLS 错误，证明�
 
 | 文件 | 断言 | 挡什么 |
 | --- | --- | --- |
-| `test/guard-test.mjs` | 39 | 判定与区域切分必须和渲染器一致 |
+| `test/guard-test.mjs` | 46 | 判定与区域切分必须和渲染器一致；以及**一处缺陷只许报告一次** |
 | `test/red-render-test.mjs` | 48 | 三类红（异常 / 无异常但带红 / 围栏内）都要被发现 |
 | `test/e2e-test.mjs` | 39 | 对**原始 KaTeX**逐个区域核对判定：修好的真不红，没修的仍然红 |
 | `test/regression-test.mjs` | 23 | 已经发生过的缺陷不许复发（用例逐字引自真实会话记录） |
@@ -127,7 +127,7 @@ TLS 校验照样通过（`curl --resolve` 返回 404 而非 TLS 错误，证明�
 | `tools/live-path-test.mjs` | 22 | **验收**：装好的副本 + profile 的真实配置 + 宿主的挂载路径，坏答案真的变成干净文本 |
 | `test/katex.mjs` | — | oracle 自检：bundle 存在、hash 对、版本对 |
 
-合计 **10 个文件、566 条断言**，`npm test` 约 4 秒，全程不需要网络。
+合计 **10 个文件、573 条断言**，`npm test` 约 4 秒，全程不需要网络。
 
 ## 5. 真实会话里的两次事故（都已被回归测试钉住）
 
@@ -223,6 +223,14 @@ cordis 解析一个 entry 的配置走 `resolveConfig(runtime, config)`，里面
   判断"到底跑的是哪份代码"要在新会话里重新验证，别信 PID 没变就以为没重载。
 - **事故文本本身可能是"没坏"的**：夹具如果复刻得不够狠，测试会给出"未发现缺陷"的
   假绿，所以先拿夹具自己去渲染一遍，确认它真的会红。
+- **"块内一处缺陷、条条日志都报它"是流式重修的必然结果，不是重复发现**：`settle` 每次
+  释放都把 `rawFolded + pending` 从头再修一遍（修复不满足结合律，只能整段重来），所以
+  日志必须按"已报告过几处"去重，否则模型在坏公式后面每写一段正文就再报一次同一处缺陷
+  ——真实会话里出现过 61 行完全相同的 `blank-line-inside`（1.2.1 修的，`announced` 计数）。
+  注意去重的是**日志**，不是修复本身：每遍仍然要真修。
+- **`createBlockState` 的日志回调叫 `opts.log`，`guardStream` 的叫 `opts.onLog`**：写错名字
+  不会报错，会静默退回模块默认的空函数，于是测试"检查日志"却在检查零行——本仓库真的这样
+  绿过一次（E 节第一版）。测试里传错名字比不传更危险。
 - **别把本机身份写进代码**：会话目录名是"绝对路径里非字母数字全换成 `-`"得来的，这个
   变换**不可逆**（`C:\a\b-c` 和 `C:\a\b\c` 结果一样），所以不能由路径反推 slug，只能
   运行时扫描 `<dsh home>/sessions/`。工具统一走 `tools/sessions.mjs`，不要在别处再写

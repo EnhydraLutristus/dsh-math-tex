@@ -2,6 +2,25 @@
 
 本文件记录每个版本的**可观察行为**变化。格式参考 Keep a Changelog，版本号遵循语义化版本。
 
+## [1.2.1] — 2026-10-16
+
+### 修复
+
+- **同一处缺陷在日志里被重复报告几十次。** `createBlockState` 的 `repairWhole()` 每次有内容
+  释放都把 `rawFolded + pending` 从头重新修一遍（这是刻意的，修复不满足结合律），但每遍都
+  无条件写一行日志。模型在一段坏公式之后继续写正文时，每释放一段就再报一次同一处缺陷——
+  真实会话里留下了 61 条一模一样的 `repaired 1 region(s): blank-line-inside`，集中在 2 秒内。
+  现在每个文本块记住已经报告过多少处修复，只报告新增的那些：
+
+  ```
+  旧：repaired 1 region(s): blank-line-inside        （每个 delta 一行，共 61 行）
+  新：repaired 1 region(s) so far: blank-line-inside （一行）
+  ```
+
+  `so far` 之后的理由是**本次新增**的，总数仍是累计的，所以之前能读出的信息一条不少。
+  修复行为本身没有变化，只有日志变了。`test/guard-test.mjs` 新增 E 节守住这条：116 个 delta
+  的流只写 1 行；同一段文本里先后出现两处缺陷时，写出 2 行、每行报一处新的。
+
 ## [1.2.0] — 2026-10-15
 
 ### 修复
@@ -134,6 +153,7 @@
 - 仅 host 侧：唯一能同时影响屏幕、记录与压缩的拦截点是 `llm/stream`。
 - 打开但未闭合的 `$$` 会吞掉后续正文，这属于 Markdown 解析行为，不属于可修复的公式区域。
 
-[1.2.0]: https://github.com/EnhydraLutristus/dsh-math-tex/releases/tag/v1.2.0
+  [1.2.1]: https://github.com/EnhydraLutristus/dsh-math-tex/releases/tag/v1.2.1
+  [1.2.0]: https://github.com/EnhydraLutristus/dsh-math-tex/releases/tag/v1.2.0
 [1.1.0]: https://github.com/EnhydraLutristus/dsh-math-tex/releases/tag/v1.1.0
 [1.0.0]: https://github.com/EnhydraLutristus/dsh-math-tex/releases/tag/v1.0.0
