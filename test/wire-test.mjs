@@ -176,13 +176,43 @@ console.log('\n=== D. holdback behaviour ===')
   check('the released text is valid maths', !stream.includes('```\n\\frac12\n'), JSON.stringify(stream))
   check('finish() returns the withheld tail', typeof end === 'string' && end.length > 0, JSON.stringify(end))
 
-  // An unclosed region below MAX_HOLD is held; once it exceeds MAX_HOLD the text
-  // before it is released so the answer can never stall on a missing `$$`.
+  // An unclosed region below MAX_HOLD is held; once it exceeds MAX_HOLD it is released
+  // UNREPAIRED, together with the text before it, so the answer can never stall on a
+  // missing `$$`. The earlier form of this check asserted the oversized region stayed
+  // withheld — which is exactly the stall, so it was asserting the defect.
   const stuck = createBlockState()
   const prose = '说明'.repeat(300)
   const released = stuck.push(`${prose}\n\n$$\n${'x'.repeat(700)}`)
   check('MAX_HOLD releases the text before an eternally unclosed block', released.includes('说明'), `released ${released.length} chars`)
-  check('the oversized region itself is still withheld', !released.includes('xxxx'), `released ${released.length} chars`)
+  check('an oversized unclosed region is released too, rather than stalling', released.includes('xxxx'), `released ${released.length} chars`)
+
+  // A small unclosed region is still withheld — the maxHold valve must not have turned
+  // into a general "release everything" license.
+  const small = createBlockState()
+  const heldSmall = small.push('说明文字。\n\n$$\n\\frac12')
+  check('a small unclosed region is still withheld', !heldSmall.includes('\\frac12'), JSON.stringify(heldSmall))
+}
+
+console.log('\n=== D2. a release may not land inside an unclosed code span ===')
+{
+  // Measured on a real turn that lost 1391 characters: the cut fell on the opening backtick
+  // of `` `$x_1_2$` ``, the guard released it, the next release found the span complete,
+  // repaired the `$` away, and from then on every repair disagreed with the text already on
+  // screen — so the guard held the rest of the answer forever. Reproduced here as the exact
+  // three-character history that triggered it.
+  const raw = '所以我这行 `$x_1_2$` 结束。'
+  const open = raw.indexOf('`')
+  check('a cut never lands on an opening backtick', safeCut(raw.slice(0, open + 1)) === open, `got ${safeCut(raw.slice(0, open + 1))} expected ${open}`)
+  check('the hold persists while the span is still open', safeCut(raw.slice(0, open + 2)) === open, `got ${safeCut(raw.slice(0, open + 2))}`)
+  check('closing the span releases it whole', safeCut(raw) === raw.length, `got ${safeCut(raw)}`)
+
+  // The end-to-end shape: the span must reach the reader intact, with its `$` NOT repaired.
+  const state = createBlockState()
+  let out = ''
+  for (const ch of raw) out += state.push(ch)
+  out += state.finish()
+  check('the code span survives to the reader verbatim', out.includes('`$x_1_2$`'), JSON.stringify(out))
+  check('the guard never held the answer', out.includes('结束'), JSON.stringify(out))
 }
 
 console.log('\n=== E. safeCut only ever cuts outside a math region ===')

@@ -307,6 +307,46 @@ check(
   `${streamRepairs.length} line(s) for ${noisyRepairs.length} repair(s)`,
 )
 
+// === E2. a release must not land inside an unclosed code span ===
+//
+// A `$` means one thing inside backticks and another outside them, so a release point
+// inside an unclosed span settles text that the next release re-reads differently. Found
+// on a real recorded turn: the release landed just before the closing backtick of
+// `` `$x_1_2$` ``, the fragment was repaired as an unterminated region (removing the `$`),
+// and every later release then disagreed with what was already on screen — the guard held
+// the rest of the answer forever. Measured cost in that turn: 199 holds and 1391 of 2213
+// characters never delivered, which the reader sees as an answer that stops mid-sentence.
+const prose = '这是一段足够长的正文文字，用来把释放点推到公式之后，让释放规则真正生效。'
+const spanFixture = `$x_1_2$\n\n${prose}${prose}\n\n所以我这行 \`$x_1_2$\` 在出站时会被定点改写。\n\n${prose}`
+const spanLines = []
+{
+  const state = createBlockState({ log: (line) => spanLines.push(line), repairMode: 'auto' })
+  const chunks = []
+  for (let i = 0; i < spanFixture.length; i += 7) chunks.push(spanFixture.slice(i, i + 7))
+  let deliveredText = ''
+  for (const chunk of chunks) deliveredText += state.push(chunk)
+  deliveredText += state.finish()
+  const holds = spanLines.filter((l) => /holding/.test(l)).length
+  console.log(`  fixture: ${spanFixture.length} chars in, ${deliveredText.length} chars out, ${holds} hold(s)`)
+  check('nothing is held back when the release falls inside an open span', holds === 0, `${holds} hold(s) logged`)
+  check(
+    'the code span arrives whole',
+    deliveredText.includes('`$x_1_2$`'),
+    'the literal sample lost a `$` — the guard edited the text it must leave alone',
+  )
+  check(
+    'the tail of the answer arrives',
+    deliveredText.trimEnd().endsWith('让释放规则真正生效。'),
+    `delivered text ends with ${JSON.stringify(deliveredText.slice(-30))}`,
+  )
+  check(
+    'the formula outside the span is still repaired',
+    deliveredText.includes('$x_1_2$'.replace('$x_1_2$', '$x_1_2$')) &&
+      /^\$x_\{1_2\}\$/m.test(deliveredText),
+    'the inline region before the span was not regrouped',
+  )
+}
+
 // ---------------------------------------------------------------------------
 // The host sees this class of bug as "the plugin loads and nothing happens", because a
 // section that throws is dropped without a trace. So the text function is called here on
