@@ -25,7 +25,7 @@ Once the text is persisted, both the screen and the session record are wrong.
 
 | | Mechanism | What it does |
 | --- | --- | --- |
-| 1 | `systemPrompt.section` | Pre-emptive rules: a display block on its own paragraph, nothing but maths inside `$$`, no heading glued to a formula |
+| 1 | `systemPrompt.section` | Pre-emptive rules: a display block on its own paragraph, nothing but maths inside `$$`, no heading glued to a formula. By default they reach only a session that already carries maths (`promptRules: auto`) |
 | 2 | `llm/stream` waterfall | The backstop: judges every region with the **same KaTeX build the client uses** and rewrites the ones that would render red, before they are written |
 
 Defence 2 is the point. `llm/stream` wraps every streaming model call, and a rewritten chunk
@@ -96,7 +96,7 @@ Set options by id from the profile's `cordis.patch.yml`:
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `enabled` | `true` | `false` mounts neither defence |
-| `promptRules` | `full` | `full` / `minimal` / `off` — how much of the rule set is injected |
+| `promptRules` | `auto` | `auto` injects only into a session that already carries math / `full` injects all seven rules everywhere / `minimal` keeps just the two that prevent red / `off` injects nothing |
 | `repair` | `auto` | `auto` rewrites; `check-only` logs without rewriting; `off` passes everything |
 | `tailBuffer` | `15` | Smallest suffix held back, so a completion marker cannot leak character by character |
 | `maxHold` | `600` | Longest a single unclosed region may wait; past it the text is released unrepaired (better to do nothing than to stall) |
@@ -111,7 +111,7 @@ worked is worse than no option at all.
 
 ```
 oracle: katex 0.16.47
-prompt section "math-output-format" registered (full)
+prompt section "math-output-format" registered (auto)
 llm/stream hooked model=deepseek-flash mode=auto
 guarded stream: 214 text delta(s) in, 231 out
 ```
@@ -127,18 +127,18 @@ npm test
 
 | File | What it measures | Assertions |
 | --- | --- | --- |
-| `guard-test` | does the judge agree with the renderer about regions? | 39 |
+| `guard-test` | does the judge agree with the renderer; does the prompt section decide per session? | 60 |
 | `red-render-test` | are all three red classes caught? | 48 |
 | `e2e-test` | does the real incident come out readable end to end? | 39 |
 | `wire-test` | does the streamed output equal the whole-text repair? | 97 |
 | `fuzz-test` | does that hold under 236 arbitrary chunkings? | 236 |
-| `config-test` | does every documented option actually do something? | 29 |
-| `smoke-test` | does the package load the way the host loads it? | 22 |
+| `config-test` | does every documented option actually do something? | 32 |
+| `smoke-test` | does the package load the way the host loads it? | 23 |
 | `installed-test` | can the **installed copy** in the profile (not the source tree) load and repair? | 11 |
 | `regression-test` | do fixed defects stay fixed? (cases quoted verbatim from real sessions) | 23 |
-| `live-path-test` | **acceptance**: installed copy + the profile's real config + the host's mount path — does a broken answer actually become clean text? | 22 |
+| `live-path-test` | **acceptance**: installed copy + the profile's real config + the host's mount path — does a broken answer actually become clean text? | 28 |
 
-566 assertions across 10 files, about 4 seconds, no network.
+594 assertions across 10 files, about 4 seconds, no network.
 
 `fuzz-test` is the strongest instrument: it requires **any** chunking of the real incident —
 one character per frame up to 1600, plus random splittings — to reassemble byte-identically

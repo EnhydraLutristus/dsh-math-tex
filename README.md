@@ -18,7 +18,7 @@ DSH 的对话渲染用 KaTeX 渲染 Markdown 数学，只要遇到它解析不�
 
 | | 机制 | 作用 |
 | --- | --- | --- |
-| 1 | `systemPrompt.section` | 事前规则：行间公式单独成段、`$$` 内只有公式、标题不粘公式……让模型少犯这个错 |
+| 1 | `systemPrompt.section` | 事前规则：行间公式单独成段、`$$` 内只有公式、标题不粘公式……让模型少犯这个错。默认只注入给**已经出现过数学**的会话（`promptRules: auto`） |
 | 2 | `llm/stream` waterfall | 兜底：用**客户端同版本**的 KaTeX 逐个区域判定，把会渲染成红色的区域改写掉，然后才落盘 |
 
 第 2 道是关键：`llm/stream` 是每一次流式模型调用外面的 waterfall，改写过的 chunk 会同时进入持久化的消息体、实时前端帧和上下文压缩，所以**屏幕和记录一起修好**。
@@ -74,7 +74,7 @@ node tools/install.mjs --uninstall  # 从 bundle 列表移除
 | 选项 | 默认 | 说明 |
 | --- | --- | --- |
 | `enabled` | `true` | `false` 时两道防线都不挂载 |
-| `promptRules` | `full` | `full` / `minimal` / `off`，规则集大小 |
+| `promptRules` | `auto` | `auto` 只给已经出现过数学的会话注入 / `full` 每个会话都注入完整七条 / `minimal` 只留防红字的两条 / `off` 不注入 |
 | `repair` | `auto` | `auto` 改写 / `check-only` 只记日志不改写 / `off` 完全放行 |
 | `tailBuffer` | `15` | 最少扣住多少个字符，避免完成记号被逐字泄漏 |
 | `maxHold` | `600` | 单个未闭合区域最多等多少字符，超了就原样放行（宁可不管，不可卡住） |
@@ -88,8 +88,9 @@ node tools/install.mjs --uninstall  # 从 bundle 列表移除
 
 ```
 oracle: katex 0.16.47
-prompt section "math-output-format" registered (full)
+prompt section "math-output-format" registered (auto)
 llm/stream hooked model=deepseek-flash mode=auto
+prompt rules now apply to session session-8c6a99cc-…
 guarded stream: 214 text delta(s) in, 231 out
 ```
 
@@ -103,18 +104,18 @@ npm test
 
 | 文件 | 测什么 | 断言 |
 | --- | --- | --- |
-| `guard-test` | 判定与区域切分是否和渲染器一致 | 39 |
+| `guard-test` | 判定与区域切分是否和渲染器一致；提示词段是否按会话决定 | 60 |
 | `red-render-test` | 三类红字是否都能抓到 | 48 |
 | `e2e-test` | 真实事故文本端到端是否可读 | 39 |
 | `wire-test` | 流式输出是否等于整篇修复 | 97 |
 | `fuzz-test` | 该性质在 236 种任意切分下是否成立 | 236 |
-| `config-test` | 每个文档化选项是否真的有效 | 29 |
-| `smoke-test` | 包是否按宿主的加载方式加载 | 22 |
+| `config-test` | 每个文档化选项是否真的有效 | 32 |
+| `smoke-test` | 包是否按宿主的加载方式加载 | 23 |
 | `installed-test` | profile 里那份**安装副本**（不是源码目录）能否加载并自修 | 11 |
 | `regression-test` | 已修缺陷不再回归（用例逐字引自真实会话） | 23 |
-| `live-path-test` | **验收**：装好的那份 + profile 的真实配置 + 宿主的挂载路径，坏答案是否真的变成干净文本 | 22 |
+| `live-path-test` | **验收**：装好的那份 + profile 的真实配置 + 宿主的挂载路径，坏答案是否真的变成干净文本 | 28 |
 
-合计 10 个文件、566 条断言，约 4 秒，不需要网络。
+合计 10 个文件、594 条断言，约 4 秒，不需要网络。
 
 最有说服力的是 `fuzz-test`：它要求**真实事故文本的任意切分**（1 字符一帧到 1600 字符一帧，外加随机切分）最终都重组为**逐字相同**的整篇修复结果。
 

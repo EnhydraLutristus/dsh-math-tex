@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { repairText, findMathRegions, inspect, judge, inspectText, loadOracle } from '../lib/tex-repair.js'
-import { createBlockState, guardStream } from '../lib/guard.js'
+import { createBlockState, guardStream, apply, TOKEN } from '../lib/guard.js'
 
 /**
  * Feed `text` through the real streaming path and collect every log line.
@@ -249,6 +249,126 @@ check(
   streamRepairs.length > 0 && streamRepairs.length <= noisyRepairs.length + 1,
   `${streamRepairs.length} line(s) for ${noisyRepairs.length} repair(s)`,
 )
+
+// ---------------------------------------------------------------------------
+// The host sees this class of bug as "the plugin loads and nothing happens", because a
+// section that throws is dropped without a trace. So the text function is called here on
+// every documented shape of `AssembleContext`, including the one with no initiator on it.
+console.log('\n=== F. the prompt rules are decided per session ===\n')
+
+/** The initiator the section's text function will be handed, as the host sets it per turn. */
+const INITIATOR = { id: 'session-under-test', variable: undefined }
+
+/**
+ * Mount the plugin on a host-shaped context whose only real service is the prompt registry.
+ *
+ * `agents.currentInitiator()` reads the shared `INITIATOR` on every call, so a test can change
+ * which session the host claims to be assembling — that is the whole input to the decision.
+ */
+async function mountPromptHost(config = {}) {
+  const sections = []
+  const logs = []
+  const listeners = []
+  const ctx = {
+    get(name) {
+      if (name === 'logger') return { info: (line) => logs.push(line) }
+      if (name === 'agents') return { currentInitiator: () => INITIATOR }
+      if (name === 'systemPrompt') {
+        return {
+          section(spec) {
+            sections.push(spec)
+            return () => {}
+          },
+        }
+      }
+      return undefined
+    },
+    on(event, handler) {
+      listeners.push({ event, handler })
+      return () => {}
+    },
+  }
+  await apply(ctx, config)
+  const section = sections[0]
+  // The host assembles by calling the registered text; a section with a plain string never
+  // sees a session, so the call below is also a check that the registration form is right.
+  const assemble = (context = { get: ctx.get }) => (typeof section?.text === 'function' ? section.text(context) : section?.text)
+  return { sections, logs, listeners, section, assemble }
+}
+
+/** Drive a request through the registered listener and drain whatever it returns. */
+async function passRequest(listener, options) {
+  const stream = listener(options, async function* () {
+    yield { type: 'text-delta', index: 0, text: '结论：S≈1.5498。' }
+  })
+  for await (const chunk of stream) void chunk
+}
+
+const mathsTurn = {
+  model: 'test',
+  sessionId: INITIATOR.id,
+  messages: [{ role: 'user', content: [{ type: 'text', text: '波动方程的通解是 $$u=f(x-at)$$' }] }],
+}
+const proseTurn = {
+  model: 'test',
+  sessionId: INITIATOR.id,
+  messages: [{ role: 'user', content: [{ type: 'text', text: '帮我写一首关于秋天的短诗。' }] }],
+}
+
+{
+  const host = await mountPromptHost({ promptRules: 'auto' })
+  check('the section is registered in auto mode', host.sections.length === 1 && host.sections[0].name === 'math-output-format', JSON.stringify(host.sections.map((s) => s.name)))
+  check('its text is a function, not a frozen string', typeof host.sections[0]?.text === 'function', typeof host.sections[0]?.text)
+
+  check('a prose session is given no rules', host.assemble() === '', JSON.stringify(host.assemble().slice(0, 40)))
+
+  await passRequest(host.listeners[0].handler, proseTurn)
+  check('a prose turn does not mark the session', host.assemble() === '', JSON.stringify(host.assemble().slice(0, 40)))
+
+  await passRequest(host.listeners[0].handler, mathsTurn)
+  const marked = host.assemble()
+  check('a maths turn marks the session', marked.includes('$$') && marked.includes(TOKEN), JSON.stringify(marked.slice(0, 60)))
+  check('and the decision is logged once', host.logs.filter((l) => /prompt rules now apply/.test(l)).length === 1, JSON.stringify(host.logs.filter((l) => /prompt rules/.test(l))))
+
+  // The stickiness is what keeps the system prompt a stable cache prefix: the same session
+  // must get the same text on every later step, including a step with no maths in it.
+  await passRequest(host.listeners[0].handler, proseTurn)
+  check('a later prose turn in a marked session still gets them', host.assemble() === marked, JSON.stringify(host.assemble().slice(0, 40)))
+
+  INITIATOR.id = 'another-session'
+  check('a different session does not', host.assemble() === '', JSON.stringify(host.assemble().slice(0, 40)))
+  INITIATOR.id = 'session-under-test'
+}
+
+{
+  const host = await mountPromptHost({ promptRules: 'auto' })
+  const noInitiator = { get: (name) => (name === 'agents' ? { currentInitiator: () => undefined } : undefined) }
+  check('an assembly with no initiator gets nothing but says so', host.assemble(noInitiator) === '' && host.logs.some((l) => /no initiator on this assembly/.test(l)), JSON.stringify(host.logs))
+}
+
+{
+  const host = await mountPromptHost({ promptRules: 'full' })
+  check('full still gives every session the rules', host.listeners.length === 1 && host.assemble().includes('$$'), JSON.stringify(host.assemble().slice(0, 40)))
+  await passRequest(host.listeners[0].handler, proseTurn)
+  check('full is unaffected by any turn', host.assemble().includes('$$'))
+}
+
+{
+  const host = await mountPromptHost({ promptRules: 'minimal' })
+  const text = host.assemble()
+  check('minimal keeps the two load-bearing rules and the marker out', text.includes('$$') && !text.includes(TOKEN), JSON.stringify(text))
+}
+
+{
+  const host = await mountPromptHost({ promptRules: 'off' })
+  check('off registers nothing', host.sections.length === 0 && host.logs.some((l) => /prompt rules disabled/.test(l)), JSON.stringify(host.sections.length))
+}
+
+{
+  const host = await mountPromptHost({ promptRules: 'auto' })
+  await passRequest(host.listeners[0].handler, { model: 'test', messages: [] })
+  check('a request the guard cannot read does not throw or mark', host.assemble() === '', JSON.stringify(host.assemble().slice(0, 40)))
+}
 
 // ---------------------------------------------------------------------------
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`)

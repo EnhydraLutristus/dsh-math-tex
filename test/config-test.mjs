@@ -51,6 +51,14 @@ const check = (name, ok, detail = '') => {
   }
 }
 
+/** The session the host claims to be assembling; the section's only input in `auto` mode. */
+const initiator = { id: 'session-config-test' }
+
+/** The `AssembleContext` the host hands a section's text function: only `get` is ever used. */
+const sectionContext = (id = initiator.id) => ({
+  get: (name) => (name === 'agents' ? { currentInitiator: () => (id === undefined ? undefined : { id }) } : undefined),
+})
+
 /** A host-shaped context: records what the plugin registered, and gives it a log sink. */
 function fakeContext(logFile) {
   const sections = []
@@ -58,6 +66,7 @@ function fakeContext(logFile) {
   const ctx = {
     get(name) {
       if (name === 'logger') return { info: () => {}, warn: () => {} }
+      if (name === 'agents') return { currentInitiator: () => initiator }
       if (name === 'systemPrompt') {
         return {
           section(spec) {
@@ -195,8 +204,45 @@ console.log('\nprompt rules\n')
   check('promptRules=full registers the long section', () => {
     assert.equal(full.sections.length, 1)
     assert.equal(full.sections[0].name, 'math-output-format')
-    assert.ok(full.sections[0].text.includes('结论数值'), 'the full rules mention the conclusion rule')
-    assert.ok(full.sections[0].text.includes(TOKEN), 'the full rules carry the receipt marker')
+    const text = full.sections[0].text
+    assert.ok(typeof text === 'function' ? text(sectionContext()) : text.includes('结论数值'), 'the full rules mention the conclusion rule')
+    assert.ok(typeof text === 'function' ? text(sectionContext()).includes(TOKEN) : text.includes(TOKEN), 'the full rules carry the receipt marker')
+  })
+}
+
+{
+  // The default is `auto`, so this block is what a profile with no `promptRules` gets.
+  const host = fakeContext(logFile)
+  await apply(host.ctx, { logFile, promptRules: 'auto' })
+  check('promptRules=auto (the default) registers the section', () => {
+    assert.equal(host.sections.length, 1)
+    assert.equal(typeof host.sections[0].text, 'function', 'auto decides per session, so the text must be a function')
+  })
+  const say = (id) => (typeof host.sections[0].text === 'function' ? host.sections[0].text(sectionContext(id)) : host.sections[0].text)
+  check('promptRules=auto gives a maths-free session nothing', () => {
+    assert.equal(say(initiator.id), '')
+    assert.equal(say('some-other-session'), '')
+    assert.equal(say(undefined), '', 'no session to identify means no rules, and the guard logs that')
+  })
+
+  // Now prove the marking end to end: a request carrying maths marks the session, and the very
+  // next assembly of that session is given the rules.
+  const hook = host.listeners.find((l) => l.event === 'llm/stream')
+  const upstream = (async function* () {
+    yield { type: 'text-delta', index: 0, text: '通解是 $$u=f(x-at)$$。' }
+  })()
+  const request = {
+    sessionId: initiator.id,
+    messages: [{ role: 'user', content: [{ type: 'text', text: '波动方程的通解是什么？' }] }],
+  }
+  let seen = ''
+  for await (const chunk of hook.handler(request, () => upstream)) {
+    if (chunk.type === 'text-delta') seen += chunk.text
+  }
+  check('promptRules=auto marks the session that carried maths', () => {
+    assert.ok(seen.includes('u=f(x-at)'), JSON.stringify(seen))
+    assert.ok(say(initiator.id).includes(TOKEN), 'the marked session must be given the full rules')
+    assert.equal(say('some-other-session'), '', 'a different session must not inherit the mark')
   })
 }
 

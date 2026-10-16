@@ -49,6 +49,9 @@ const sourceEntry = pathToFileURL(join(pkgRoot, 'lib', 'index.js')).href
 const installed = existsSync(join(INSTALLED, 'package.json'))
 const ENTRY = process.env.DSH_MATH_TEX_ENTRY ?? (installed ? installedEntry : sourceEntry)
 
+/** The session this run pretends to be: the id every request carries, and the section reads. */
+const INITIATOR_ID = 'session-live-path-test'
+
 let pass = 0
 let fail = 0
 const check = (name, ok, detail = '') => {
@@ -104,13 +107,25 @@ console.log(`  config   ${JSON.stringify(baseConfig)}${Object.keys(baseConfig).l
  * A mount that registers nothing is a failure here, not a skip: that is exactly the state
  * this plugin was in for its whole life.
  */
+/** Which session the host claims to be assembling, as `agents.currentInitiator()` reports it. */
+const liveInitiator = { id: INITIATOR_ID }
+
 async function mount(config, tag) {
   const logFile = join(logDir, `${tag}.log`)
   const seen = []
   const listener = { fn: null }
+  const sections = []
   const ctx = {
     get(name) {
-      if (name === 'systemPrompt') return { section: (section) => seen.push(`section:${section.name}`) }
+      if (name === 'systemPrompt') {
+        return {
+          section: (section) => {
+            sections.push(section)
+            seen.push(`section:${section.name}`)
+          },
+        }
+      }
+      if (name === 'agents') return { currentInitiator: () => liveInitiator }
       if (name === 'logger') seen.push('logger')
       return undefined
     },
@@ -121,7 +136,14 @@ async function mount(config, tag) {
     effect() {},
   }
   await plugin.apply(ctx, { ...config, logFile })
-  return { listener: listener.fn, logFile, accessed: seen }
+  const section = sections[0]
+  /** What the model would be told for session `id`, via the very function the host calls. */
+  const rulesFor = (id) => {
+    const says = { id }
+    const context = { get: (name) => (name === 'agents' ? { currentInitiator: () => says } : undefined) }
+    return typeof section?.text === 'function' ? section.text(context) : section?.text
+  }
+  return { listener: listener.fn, logFile, accessed: seen, section, rulesFor }
 }
 
 /** Feed text the way the host does: many small deltas inside one text block. */
@@ -133,8 +155,16 @@ async function streamed(listener, text, chunk = 5) {
     }
     yield { type: 'block-end', index: 0 }
   }
+  // A real request carries the conversation, and that is where the plugin looks for the
+  // mathematics that decides the prompt section. Feeding prose under the same session must
+  // therefore be distinguishable from feeding maths, or the section's test proves nothing.
+  const options = {
+    model: 'live-path-test',
+    sessionId: INITIATOR_ID,
+    messages: [{ role: 'user', content: [{ type: 'text', text: /\$|\\[a-zA-Z]/.test(text) ? text : '随便聊聊今天的天气。' }] }],
+  }
   let out = ''
-  for await (const part of listener({ model: 'live-path-test' }, next)) {
+  for await (const part of listener(options, next)) {
     if (part.type === 'text-delta') out += part.text
   }
   return out
@@ -202,6 +232,30 @@ for (const c of CASES.filter((x) => !x.clean)) {
 console.log('\n=== the live path: the reader gets text with no red region ===')
 const liveMount = await mount(baseConfig, 'live')
 check('the live config mounts the listener', typeof liveMount.listener === 'function', liveMount.accessed.join(' '))
+
+// Before any maths flows, this session has asked for no formulae. The check runs HERE, ahead
+// of the stream loop below, because that loop is what marks the session. What the profile
+// resolves to decides what "no formulae" means: under `auto` this session gets an empty
+// contribution, under `full` (and under an installed build older than the `auto` default) it
+// gets the rules from the first step, which is the behaviour `full` promises.
+console.log('\n=== the prompt rules follow the session, not the host ===')
+check('the section is registered', liveMount.accessed.includes('section:math-output-format'), liveMount.accessed.join(' '))
+const autoRules = (baseConfig.promptRules ?? plugin.DEFAULTS.promptRules) === 'auto'
+// A build older than this feature registers a plain string, which is a legitimate state for an
+// installed copy that has not been refreshed yet; the check is that the entry under test agrees
+// with itself, not that it is the newest build.
+check('the registered text matches what this build supports', typeof liveMount.section?.text === (autoRules ? 'function' : 'string'), typeof liveMount.section?.text)
+console.log(
+  `  profile mode: ${baseConfig.promptRules ? `${baseConfig.promptRules} (set by cordis.patch.yml)` : `${plugin.DEFAULTS.promptRules} (the entry's default)`}`,
+)
+if (autoRules) {
+  check('a session that has not done maths is given none', liveMount.rulesFor(INITIATOR_ID) === '', JSON.stringify(liveMount.rulesFor(INITIATOR_ID).slice(0, 40)))
+  check('another session is given none either', liveMount.rulesFor('some-other-session') === '')
+} else {
+  check('a session that has not done maths is given none', true, 'not applicable: this entry gives the rules in every session')
+  check('another session is given none either', true, 'not applicable: this entry gives the rules in every session')
+}
+
 for (const c of CASES) {
   const out = await streamed(liveMount.listener, c.broken)
   const flagged = redRegions(out)
@@ -217,6 +271,15 @@ console.log('\n=== the guard keeps the answer, not just the formatting ===')
   const out = await streamed(liveMount.listener, CASES[0].broken)
   check('the conclusion survives', out.includes('4') && out.includes('x = 2'), JSON.stringify(out))
   check('the prose survives', out.includes('结论如下：') && out.includes('于是'), JSON.stringify(out))
+  // The cache-prefix promise: once a session has shown mathematics, the same text is given on
+  // every later step, so the prefix does not flip back and forth.
+  if (autoRules) {
+    check('the maths session now gets the rules', liveMount.rulesFor(INITIATOR_ID).includes('$$'))
+    check('and a session that never did still gets none', liveMount.rulesFor('some-other-session') === '')
+  } else {
+    check('the maths session now gets the rules', liveMount.rulesFor(INITIATOR_ID).includes('$$'))
+    check('and a session that never did still gets none', true, `not applicable under mode ${baseConfig.promptRules ?? plugin.DEFAULTS.promptRules}`)
+  }
 }
 
 console.log('\n=== the sentinel never reaches the reader ===')

@@ -104,9 +104,11 @@ const { apply } = entry
 const logLines = []
 const sections = []
 const listeners = []
+const initiator = { id: 'session-smoke-test' }
 const fakeCtx = {
   get(name) {
     if (name === 'logger') return { info: (line) => logLines.push(line) }
+    if (name === 'agents') return { currentInitiator: () => initiator }
     if (name === 'systemPrompt') {
       return {
         section(spec) {
@@ -130,7 +132,11 @@ await apply(fakeCtx, { logFile })
 await check('prompt section registered with the expected name', () => {
   assert.equal(sections.length, 1)
   assert.equal(sections[0].name, 'math-output-format')
-  assert.ok(sections[0].text.includes('$$'), 'the rules must mention the display delimiter')
+  assert.equal(typeof sections[0].text, 'function', 'the rules are decided per session, so the text must be a function')
+})
+await check('the section contributes nothing to a session with no maths', () => {
+  const say = (id) => sections[0].text({ get: (n) => (n === 'agents' ? { currentInitiator: () => ({ id }) } : undefined) })
+  assert.equal(say(initiator.id), '', 'a session that typesets nothing must not be asked for formulae')
 })
 await check('llm/stream listener registered', () => {
   assert.equal(listeners.length, 1)

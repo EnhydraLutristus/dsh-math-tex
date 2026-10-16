@@ -3,7 +3,7 @@
   "manifestVersion": "0.15",
   "id": "dsh-math-tex",
   "name": "dsh-math-tex",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "license": "MIT",
   "facets": {
     "host": {
@@ -37,7 +37,7 @@
       {
         "name": "math-output-format",
         "order": 1000,
-        "summary": "Display math on its own paragraph, nothing but math inside $$; selected by the promptRules option (full | minimal | off)."
+        "summary": "Display math on its own paragraph, nothing but math inside $$; selected by the promptRules option (auto | full | minimal | off). Under the default 'auto', the rules reach only a session whose conversation already carries math."
       }
     ]
   },

@@ -1,6 +1,6 @@
 # dsh-math-tex — 当前状态（可交接）
 
-包名 `dsh-math-tex` 1.2.1。**仓库根目录就是包根目录**（checkout 在
+包名 `dsh-math-tex` 1.2.2。**仓库根目录就是包根目录**（checkout 在
 `default-workspace\dsh-math-tex\`，workspace 里现在只剩这一个项目，其余全在
 `default-workspace\_archive\`）。装到
 `%USERPROFILE%\.dsh\profiles\desktop\node_modules\dsh-math-tex\`，
@@ -23,7 +23,7 @@
 node tools/install.mjs                            # 复制 payload + 登记 bundle（幂等）
 node tools/install.mjs --dry-run                  # 只说会改什么
 node tools/install.mjs --uninstall dsh-math-tex   # 反安装（可指定别的包名）
-npm test                                          # 10 个测试文件，566 条断言
+npm test                                          # 10 个测试文件，594 条断言
 ```
 
 `tools/install.mjs` 里所有路径都由 `import.meta.url` 推出来，checkout 放在哪都能跑；
@@ -77,6 +77,17 @@ TLS 校验照样通过（`curl --resolve` 返回 404 而非 TLS 错误，证明�
    标题不得与公式同行、行内公式不超过约 160 字符、结尾用纯文本重述数值、
    最后单独输出哨兵 `⟪MG-REPAIR⟫` 作为"规则已生效"的收据）。
 
+   **注入给谁由 `promptRules` 决定，默认 `auto`**：只给对话里已经出现过数学的会话。
+   判据是 `llm/stream` 里那次请求的 `options.messages`（含 `$`、`\(`、`\[`、`\begin{`
+   或 `\`-命令即算），标记**粘滞**——一个会话一旦被标记，之后的每一步都拿到同一段文本。
+   粘滞既为缓存（会话的系统提示词是每一步请求的前缀，文本时有时无就是反复的缓存未命中），
+   也为防线不丢（`test/guard-test.mjs` F 节直接断言同一会话两次 assembly 得到完全相同的字符串）。
+   标记发生在请求组装之后，所以**携带数学的那一次请求本身还没有规则**，下一步才生效——
+   刻意如此：在回合中途改前缀，比晚一步贵。
+
+   `full` 仍然给每个会话注入七条，`minimal`、`off` 语义不变。修不修跟这个选项无关：
+   无论 `promptRules` 取什么值，`llm/stream` 的检查都在跑。
+
    > 七条规则里最后一条曾误写为「用 `$...$` 输出结论」——那正是事故的第二个触发源
    > （`$` 在中文正文里当货币符号会配错对）。现在改成"用纯文本重述结论数值"。
    > 规则文本本身当然要提 `$$`（不然没法告诉模型怎么用），`test/smoke-test.mjs:133`
@@ -115,19 +126,19 @@ TLS 校验照样通过（`curl --resolve` 返回 404 而非 TLS 错误，证明�
 
 | 文件 | 断言 | 挡什么 |
 | --- | --- | --- |
-| `test/guard-test.mjs` | 46 | 判定与区域切分必须和渲染器一致；以及**一处缺陷只许报告一次** |
+| `test/guard-test.mjs` | 60 | 判定与区域切分必须和渲染器一致；一处缺陷只许报告一次；提示词段按会话决定 |
 | `test/red-render-test.mjs` | 48 | 三类红（异常 / 无异常但带红 / 围栏内）都要被发现 |
 | `test/e2e-test.mjs` | 39 | 对**原始 KaTeX**逐个区域核对判定：修好的真不红，没修的仍然红 |
 | `test/regression-test.mjs` | 23 | 已经发生过的缺陷不许复发（用例逐字引自真实会话记录） |
 | `test/wire-test.mjs` | 97 | 真实 DSH 会话里的线上形状；流式输出等于"整段一次修复" |
 | `test/fuzz-test.mjs` | 236 | 随机切分 + 随机损坏，不变量：任何切法都不留下红区 |
-| `test/config-test.mjs` | 29 | 选项解析与手写校验；**以及 loader 真正读的那个 `Config` 导出** |
-| `test/smoke-test.mjs` | 22 | 挂载、再导出、日志、提示词段已注册 |
+| `test/config-test.mjs` | 32 | 选项解析与手写校验；**以及 loader 真正读的那个 `Config` 导出** |
+| `test/smoke-test.mjs` | 23 | 挂载、再导出、日志、提示词段已注册 |
 | `test/installed-test.mjs` | 11 | 装到 profile 的那份与源码一致、且真能用 |
-| `tools/live-path-test.mjs` | 22 | **验收**：装好的副本 + profile 的真实配置 + 宿主的挂载路径，坏答案真的变成干净文本 |
+| `tools/live-path-test.mjs` | 28 | **验收**：装好的副本 + profile 的真实配置 + 宿主的挂载路径，坏答案真的变成干净文本 |
 | `test/katex.mjs` | — | oracle 自检：bundle 存在、hash 对、版本对 |
 
-合计 **10 个文件、573 条断言**，`npm test` 约 4 秒，全程不需要网络。
+合计 **10 个文件、594 条断言**，`npm test` 约 4 秒，全程不需要网络。
 
 ## 5. 真实会话里的两次事故（都已被回归测试钉住）
 
@@ -201,6 +212,16 @@ cordis 解析一个 entry 的配置走 `resolveConfig(runtime, config)`，里面
 
 ## 8. 踩过的坑（别重复）
 
+- **`auto` 不是一个规则集，是一个受众决定**：第一版把它当成第三种文案去
+  `PROMPT_RULES['auto']` 查表，查不到就落进"配置关掉了提示词"的分支，section 根本不注册——
+  `test/smoke-test.mjs` 的"prompt section registered"用例当场变红。文案永远取 `full`，
+  `auto` 只决定给谁。
+- **判据要读**请求**里的消息，不是模型刚写的那段文本**：`llm/stream` 的
+  `options.messages` 是这一次请求的全部上下文（含用户刚发的那句），而 `options.system`
+  是本步已经组装好的提示词——后者反映的是上一步的决定，拿它当"要不要注入"的输入会形成
+  自锁：因为没注入所以看不到数学，因为看不到数学所以永远不注入。
+- **`createBlockState` 的日志参数叫 `log`，`guardStream` 的叫 `onLog`**：名字写错不报错，
+  静默退回模块级空函数，"检查日志"的测试于是检查零行并假绿（1.2.1 的 E 节踩过）。
 - **别用正则改 profile 的 `package.json`**：`$1,` 曾把逗号写到错误的块里，产出非法
   JSON，差点让 profile 起不来，只能从备份恢复。一切走 JSON 解析并留备份。
 - **"规则命中"不等于"位置坏了"**：配对启发式会在 `\text{$…$}` 这类合法写法上误判，

@@ -2,6 +2,47 @@
 
 本文件记录每个版本的**可观察行为**变化。格式参考 Keep a Changelog，版本号遵循语义化版本。
 
+## [1.2.2] — 2026-10-16
+
+### 变更
+
+- **`promptRules` 默认值由 `full` 改为新的 `auto`：只给真正用到数学的会话注入提示词规则。**
+  在此之前，不论你开哪个窗口，系统提示词里都躺着七条排版规则和一条「输出 ⟪MG-REPAIR⟫ 收据」
+  的要求；一段从不排版的对话，每一步都在为这九行付费，而收据本身是可见的机械痕迹。
+  现在规则段的 `text` 是一个函数，按会话决定内容：
+
+  - 该会话此前**已经出现过数学**（请求里任一条消息含 `$`、`\(`、`\[`、`\begin{` 或
+    `\`-命令）→ 注入 `full` 那七条规则；
+  - 否则 → 注入空串，既不要求公式，也不要求收据。
+
+  判定是**粘滞的**：一个会话一旦被标记为数学会话，之后的每一步都拿到同一段文本。这既是为了
+  稳定（会话的系统提示词是每一步请求的缓存前缀，规则若时有时无，每翻一次就是一次缓存未命中），
+  也是为了不丢防线（`test/guard-test.mjs` F 节直接断言同一会话前后两次 assembly 拿到完全相同的
+  字符串）。标记发生在 `llm/stream` 钩子里、请求组装**之后**，所以携带数学的那一次请求本身还
+  拿不到规则，从下一次模型步骤开始生效——这是刻意的：在回合中途改变缓存前缀，代价比晚一步高。
+
+  `full` / `minimal` / `off` 语义不变，`full` 仍然给**每个**会话注入那七条。流修复不受任何影响：
+  无论 `promptRules` 取什么值，检查器都在每次请求上跑。
+
+- **无法识别会话时不再猜。** section 的 `text` 函数拿到的 `AssembleContext` 里没有会话身份，
+  插件是从宿主贯穿整个回合的 initiator 上读的（DSH 里 Agent 的 id 就是会话 id）。若某次组装
+  没有 initiator，section 注入空串并在日志里留一行
+  `prompt section: no initiator on this assembly; only already-marked sessions get the rules`——
+  这种情况下「提示词那一半不再生效」与「这不是数学会话」表现完全一样，不记一笔就查不出来。
+
+- **开发中发现的真问题：`auto` 曾被查表查成 `undefined`。** 第一版把 `auto` 当成第三种规则文案
+  去 `PROMPT_RULES['auto']` 取，取不到就直接走「prompt rules disabled by config」分支——
+  section 根本不注册。`test/smoke-test.mjs` 的「prompt rules registered」用例当场变红抓住它。
+  `auto` 现在只决定**给谁**，文案固定取 `full`。
+
+### 测试
+
+- 断言总数 566 → **594**（10 个文件）：`guard-test` 46 → 60（新增 F 节：六种挂载形态、
+  粘滞性、跨会话隔离、无 initiator 的降级），`config-test` 29 → 32（`auto` 的标记链路），
+  `smoke-test` 22 → 23，`live-path-test` 22 → 28（装好的副本按宿主方式验证同一个行为）。
+- 装好的副本要等重启宿主并写入新版本后才做得到 `auto` 的实时验证：`live-path-test` 会先报告
+  当前 profile 的 `promptRules` 取值，装的是旧版本时如实标注「not applicable」，而不是假装通过。
+
 ## [1.2.1] — 2026-10-16
 
 ### 修复
@@ -153,6 +194,7 @@
 - 仅 host 侧：唯一能同时影响屏幕、记录与压缩的拦截点是 `llm/stream`。
 - 打开但未闭合的 `$$` 会吞掉后续正文，这属于 Markdown 解析行为，不属于可修复的公式区域。
 
+  [1.2.2]: https://github.com/EnhydraLutristus/dsh-math-tex/releases/tag/v1.2.2
   [1.2.1]: https://github.com/EnhydraLutristus/dsh-math-tex/releases/tag/v1.2.1
   [1.2.0]: https://github.com/EnhydraLutristus/dsh-math-tex/releases/tag/v1.2.0
 [1.1.0]: https://github.com/EnhydraLutristus/dsh-math-tex/releases/tag/v1.1.0
