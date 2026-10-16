@@ -31,7 +31,22 @@ profile 目录可用 `DSH_PROFILE_DIR` 覆盖。
 
 源码已推到公开仓库 **https://github.com/EnhydraLutristus/dsh-math-tex**（`main`，MIT）。
 
-**在这台机器上跑 git 要用包装脚本** `<workspace>\.tools\git.ps1`（把参数原样传给 git）：
+> **推送工具链现状（2026-10-17 记）**：`<workspace>\.tools\` 整个目录已经不在磁盘上了
+> （`gh.exe`、`gh-token.txt`、`git.ps1` 都没了），而仓库级 `credential.helper` 还指着
+> `.tools\bin\gh.exe`，所以那次 `git push` 报的是
+> `git: 'credential-…/.tools/bin/gh.exe' is not a git command` +
+> `fatal: could not read Username for 'https://github.com'`——**看起来像没登录，其实是
+> helper 文件被删了**。已把那条失效的 `credential.helper` 从 `.git/config` 里删掉。
+>
+> 本次是用 Windows 凭据管理器里那条 `git:https://github.com`（用户 `EnhydraLutristus`）
+> 临时导出到一次性的 `credential-store` 文件推的（推完即删）。下次要推，两条路：
+> ① `winget install GitHub.cli` 后 `gh auth login`，再把 helper 指回去；
+> ② 用 `git-credential-manager.exe`（在 `C:\Program Files\Git\mingw64\bin\`，
+> 注意 git 的 `credential.helper` 值**不能含空格**，直接写这个路径会失败）。
+> 本次实测 DNS 仍把 `github.com` 解析到 `20.205.243.166`（就是下面记的那个超时 IP），
+> 但 `git push` 一次就通了，没走 `.tools\git.ps1` 的 `curloptResolve` 绕行。
+
+**在这台机器上跑 git 要用包装脚本** `<workspace>\.tools\git.ps1`（把参数原样传给 git；**当前缺失，见上面的说明**）：
 
 ```powershell
 # 在仓库目录里直接调用即可；参数原样传给 git，仓库位置由当前目录向上找 .git
