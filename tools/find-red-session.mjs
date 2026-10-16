@@ -15,13 +15,22 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
-import zlib from 'node:zlib'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { dirname, join } from 'node:path'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const { findMathRegions, inspect, loadOracle } = await import(pathToFileURL(join(here, '..', 'lib', 'tex-repair.js')).href)
 const { TOKEN } = await import(pathToFileURL(join(here, '..', 'lib', 'guard.js')).href)
+/**
+ * The shared frame walker, not a local one.
+ *
+ * This tool used to carry its own "scan for the magic, decompress from there" reader. That reader
+ * silently returned NOTHING for every record appended by the current host: the record is a
+ * concatenation of zstd frames, and decompressing from a magic offset stops after the first frame
+ * — so it reported "0 assistant messages" for a session that visibly had answers, which reads as
+ * "nothing wrong found". One decoder, one behaviour.
+ */
+const { readSessionRecords } = await import(pathToFileURL(join(here, 'zstd-frames.mjs')).href)
 
 const oracle = await loadOracle()
 console.log(`oracle: ${oracle.available ? `katex ${oracle.version}` : `UNAVAILABLE (${oracle.error})`}`)
@@ -35,34 +44,6 @@ const ROOT = join(HOME, '.dsh', 'sessions')
 if (!fs.existsSync(ROOT)) {
   console.error(`no sessions directory at ${ROOT}`)
   process.exit(1)
-}
-
-const MAGIC = Buffer.from([0x28, 0xb5, 0x2f, 0xfd])
-
-/** Decode a concatenated-zstd session record into records, de-duplicated by `seq`. */
-function readSession(file) {
-  const buf = fs.readFileSync(file)
-  const bySeq = new Map()
-  for (let pos = 0; pos < buf.length - 3; pos++) {
-    if (!buf.subarray(pos, pos + 4).equals(MAGIC)) continue
-    try {
-      const text = zlib.zstdDecompressSync(buf.subarray(pos)).toString('utf8')
-      for (const line of text.split('\n')) {
-        if (!line.trim().startsWith('{')) continue
-        let o
-        try {
-          o = JSON.parse(line)
-        } catch {
-          continue
-        }
-        if (typeof o.seq === 'number') bySeq.set(o.seq, o)
-      }
-      pos += 3
-    } catch {
-      /* not a frame boundary */
-    }
-  }
-  return [...bySeq.values()].sort((a, b) => a.seq - b.seq)
 }
 
 const textOf = (r) => (r.data?.message?.content ?? []).filter((b) => b.type === 'text').map((b) => b.text).join('\n')
@@ -105,7 +86,7 @@ let reported = 0
 for (const { id, file, mtime } of dirs.slice(0, limit)) {
   let records
   try {
-    records = readSession(file)
+    records = readSessionRecords(file)
   } catch (err) {
     console.log(`${id}  DECODE FAILED: ${err?.message ?? err}`)
     continue

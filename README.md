@@ -136,13 +136,18 @@ node tools/inspect-fixture.mjs path/to/text.md    # 换成任何一份文本
 
 它会打印区域数量、被标记的区域及其原因、修复动作，以及修复后是否还有区域会被渲染成红色。
 
-排查真实会话时另有三件工具：
+排查真实会话时有这几件工具：
 
 ```bash
 node tools/find-red-session.mjs                   # 扫本机所有会话，列出还会渲染成红色的回答
+node tools/strip-sentinel.mjs --list              # 列出正文里还留着哨兵的记录
+node tools/strip-sentinel.mjs --id <前缀> --yes   # 把那些哨兵清掉（逐帧改写，改完自验，失败自动回滚）
 node tools/inspect-session.mjs <session.jsonl>    # 单条会话逐条消息：区域、判定、守卫会怎么修
 node tools/probe-region.mjs 'd\alpha=0'           # 把候选写法逐个送进渲染器，看哪种被接受
 ```
+
+**注意**：记录里存的是**修复前**的原文——守卫改的是往外发的流，不改落盘的模型文本。
+所以"记录里还有坏公式"不代表屏幕上还有红字，判断要看同一次流的出口。
 
 ## 设计边界
 

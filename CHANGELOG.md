@@ -40,8 +40,10 @@
 - 断言总数 566 → **594**（10 个文件）：`guard-test` 46 → 60（新增 F 节：六种挂载形态、
   粘滞性、跨会话隔离、无 initiator 的降级），`config-test` 29 → 32（`auto` 的标记链路），
   `smoke-test` 22 → 23，`live-path-test` 22 → 28（装好的副本按宿主方式验证同一个行为）。
-- 装好的副本要等重启宿主并写入新版本后才做得到 `auto` 的实时验证：`live-path-test` 会先报告
-  当前 profile 的 `promptRules` 取值，装的是旧版本时如实标注「not applicable」，而不是假装通过。
+- 装好之后**必须重启宿主进程**才生效，开新窗口不够：插件是进程级加载的，新会话沿用进程里那份，
+  而 `tools/install.mjs` 打印的「NEW SESSION required」只说对了一半。判断当前跑的是哪一版，
+  看日志格式而不是看 `package.json`——`repaired N region(s) so far:` 是 1.2.1 之后的写法。
+  实测：1.2.2 装好两小时后，一个真实回合仍在 3 秒内写了 373 行旧格式日志（那次跑的是 1.2.0）。
 
 ## [1.2.1] — 2026-10-16
 

@@ -155,6 +155,21 @@ without red; the others check the judge and the region structure. It is the last
 defence against "the verdict was right but the rewrite is still red". Revert the fix and it
 fails 4 assertions.
 
+## Inspecting a real session
+
+```bash
+node tools/find-red-session.mjs                   # every session, listing answers that would render red
+node tools/strip-sentinel.mjs --list              # records still holding the completion marker
+node tools/strip-sentinel.mjs --id <prefix> --yes # strip it (frame-wise, self-verifying, rolls back on any mismatch)
+node tools/inspect-session.mjs <session.jsonl>    # one session, message by message: regions, verdicts, what the guard would do
+node tools/probe-region.mjs 'd\alpha=0'           # push candidate spellings through the renderer one by one
+```
+
+A record holds the **pre-repair** text: the guard rewrites the outgoing stream, not the model's
+message. So "the record still has a broken formula" does not mean the screen did — judge the
+exit of the same stream instead. `tools/find-red-session.mjs` reports verdicts on the recorded
+text, which is why a flagged region there is evidence about the model, not about the reader.
+
 ## Design boundaries
 
 - **The renderer cannot be patched.** That is the premise, not a compromise: the frontend is
