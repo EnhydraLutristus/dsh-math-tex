@@ -1,6 +1,6 @@
 # dsh-math-tex — 当前状态（可交接）
 
-包名 `dsh-math-tex` 1.2.3。**仓库根目录就是包根目录**（checkout 在
+包名 `dsh-math-tex` 1.2.4。**仓库根目录就是包根目录**（checkout 在
 `default-workspace\dsh-math-tex\`，workspace 里现在只剩这一个项目，其余全在
 `default-workspace\_archive\`）。装到
 `%USERPROFILE%\.dsh\profiles\desktop\node_modules\dsh-math-tex\`，
@@ -130,8 +130,8 @@ TLS 校验照样通过（`curl --resolve` 返回 404 而非 TLS 错误，证明�
 
 | 文件 | 断言 | 挡什么 |
 | --- | --- | --- |
-| `test/guard-test.mjs` | 60 | 判定与区域切分必须和渲染器一致；一处缺陷只许报告一次；提示词段按会话决定 |
-| `test/red-render-test.mjs` | 59 | 三类红（异常 / 无异常但带红 / 围栏内）都要被发现；回显从 HTML 与 message 两份账本里取 |
+| `test/guard-test.mjs` | 67 | 判定与区域切分必须和渲染器一致；一处缺陷只许报告一次；修复不许破坏周围的 Markdown 结构 |
+| `test/red-render-test.mjs` | 68 | 三类红（异常 / 无异常但带红 / 围栏内）都要被发现；回显从 HTML 与 message 两份账本里取，红渲染没有 message 时取画出来的 span |
 | `test/e2e-test.mjs` | 39 | 对**原始 KaTeX**逐个区域核对判定：修好的真不红，没修的仍然红 |
 | `test/regression-test.mjs` | 23 | 已经发生过的缺陷不许复发（用例逐字引自真实会话记录） |
 | `test/wire-test.mjs` | 97 | 真实 DSH 会话里的线上形状；流式输出等于"整段一次修复" |
@@ -142,7 +142,7 @@ TLS 校验照样通过（`curl --resolve` 返回 404 而非 TLS 错误，证明�
 | `tools/live-path-test.mjs` | 28 | **验收**：装好的副本 + profile 的真实配置 + 宿主的挂载路径，坏答案真的变成干净文本 |
 | `test/katex.mjs` | — | oracle 自检：bundle 存在、hash 对、版本对 |
 
-合计 **10 个文件、596 条断言**，`npm test` 约 4 秒，全程不需要网络。
+合计 **10 个文件、624 条断言**，`npm test` 约 4 秒，全程不需要网络。
 
 ## 5. 真实会话里的两次事故（都已被回归测试钉住）
 

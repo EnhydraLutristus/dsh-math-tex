@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { loadKatex } from './katex.mjs'
 
-const { findMathRegions, inspect, repairText, judge, rendersRed, echoedErrorText, recoverRedRegion, ERROR_COLOR, loadOracle } = await import('../lib/tex-repair.js')
+const { findMathRegions, inspect, repairText, judge, rendersRed, echoedErrorText, errorEcho, recoverRedRegion, ERROR_COLOR, loadOracle } = await import('../lib/tex-repair.js')
 
 // The renderer must be loaded before any verdict is asked for; `judge` reports "oracle
 // unavailable" rather than guessing, so a forgotten wait here shows up as an obvious
@@ -65,6 +65,13 @@ const recoverable = [
   // where the fence then cut a table row in half.
   ['x_1_2', 'x_{1_2}'],
   ['a_b_c', 'a_{b_c}'],
+  // Reported from a real session: more than one doubled subscript in a single region. The
+  // renderer reports one of them at a time, so a repair that regroups only one candidate is
+  // rejected by its own re-judge (`a_{1_2} + b_3_4` is still red), and the old single-anchor
+  // candidate list made the whole region degrade to a fenced block — in a table row, that
+  // fence then cut the row in half. Every doubled subscript in the region is regrouped in the
+  // same rewrite.
+  ['a_1_2 + b_3_4 = c', 'a_{1_2} + b_{3_4} = c'],
   ['\\begin{cases} \\bad & x \\ge t \\\\ b & x < t \\end{cases}', null],
   ['\\htmlClass{red}{x}', null],
 ]
@@ -97,6 +104,15 @@ check(
   echoedErrorText(commandVerdict.html, commandVerdict.message) === '\\foobar' && echoedErrorText(commandVerdict.html) === '\\foobar',
   `html=${JSON.stringify(echoedErrorText(commandVerdict.html))} both=${JSON.stringify(echoedErrorText(commandVerdict.html, commandVerdict.message))}`,
 )
+// A red render reports NO message at all: the strict pass succeeded and KaTeX painted the
+// source red. The echo has to come from the painted span, or the region can only be fenced —
+// and `errorEcho` refusing the whole region is what put a fence inside a table row.
+const redVerdict = judge('\\htmlClass{red}{x}', true)
+check(
+  'a red render carries no message, so the painted span is the echo',
+  redVerdict.message === null && errorEcho(redVerdict.html, redVerdict.message, '\\htmlClass{red}{x}')?.echo === '\\htmlClass',
+  `message=${JSON.stringify(redVerdict.message)} echo=${JSON.stringify(errorEcho(redVerdict.html, redVerdict.message, '\\htmlClass{red}{x}'))}`,
+)
 
 console.log('\n=== 4. unrecoverable damage is fenced, never guessed ===')
 // `x_1_2` used to sit in this list. It was here because the guard could not recover it,
@@ -105,7 +121,7 @@ console.log('\n=== 4. unrecoverable damage is fenced, never guessed ===')
 // so the recoverable list is where it belongs. What stays here is damage the echo cannot
 // drive a repair for, with the nested doubled subscript as the control: `x_1_2_3` fixes one
 // level and then stops, so it must degrade visibly rather than be guessed at twice.
-const unfixable = ['\\frac{1}{2', 'x_1_2_3', '\\begin{cases} a & b \\\\ c']
+const unfixable = ['\\frac{1}{2', 'x_1_2_3', 'x_{1_2}_3', '\\begin{cases} a & b \\\\ c']
 for (const tex of unfixable) {
   const r = recoverRedRegion(tex, true)
   const out = repairText(`正文 $${tex}$ 结束`)
@@ -121,6 +137,15 @@ for (const tex of unfixable) {
     `source lost from ${JSON.stringify(out.text)}`,
   )
 }
+// `x_{1_2}_3` is the control for the grouping rule: the subscript inside the braces is valid
+// TeX and the renderer complains about the OUTER one, so a repair that regroups from the last
+// `_` in the token rewrites the author's own `x_{1_2}` into `x_{1_{2_3}}`. It renders, but it
+// says something else, so the region must degrade visibly instead.
+check(
+  'a subscript already inside a group is left alone, even when the region is repaired',
+  repairText('正文 $x_{1_2}_3$ 结束').text.includes('x_{1_2}'),
+  `got ${JSON.stringify(repairText('正文 $x_{1_2}_3$ 结束').text)}`,
+)
 
 console.log('\n=== 5. healthy regions must not be touched ===')
 const healthies = [
