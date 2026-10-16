@@ -1,6 +1,6 @@
 # dsh-math-tex — 当前状态（可交接）
 
-包名 `dsh-math-tex` 1.2.2。**仓库根目录就是包根目录**（checkout 在
+包名 `dsh-math-tex` 1.2.3。**仓库根目录就是包根目录**（checkout 在
 `default-workspace\dsh-math-tex\`，workspace 里现在只剩这一个项目，其余全在
 `default-workspace\_archive\`）。装到
 `%USERPROFILE%\.dsh\profiles\desktop\node_modules\dsh-math-tex\`，
@@ -23,7 +23,7 @@
 node tools/install.mjs                            # 复制 payload + 登记 bundle（幂等）
 node tools/install.mjs --dry-run                  # 只说会改什么
 node tools/install.mjs --uninstall dsh-math-tex   # 反安装（可指定别的包名）
-npm test                                          # 10 个测试文件，594 条断言
+npm test                                          # 10 个测试文件，596 条断言
 ```
 
 `tools/install.mjs` 里所有路径都由 `import.meta.url` 推出来，checkout 放在哪都能跑；
@@ -116,8 +116,12 @@ TLS 校验照样通过（`curl --resolve` 返回 404 而非 TLS 错误，证明�
 1. **定点施救**——只在两种有确定语义的情况下动：删掉渲染器不认识的命令的反斜杠
    （`\foobar` → `foobar`），或给重复的算子重新分组（`x_1_2` → `x_{1_2}`）。
    改完必须**重新渲染验证"严格通过且无红色"**才接受，所以不会出现"改一下只是把错误
-   挪了个位置"的循环；
-2. **源码围栏**——修不了的（括号不闭合、`\begin` 没有 `\end`）作为一个代码块原样给出。
+   挪了个位置"的循环。判据来自渲染器**两份账本**：HTML 里的 `<mtext>` 回显（渲染器真正
+   画出来的），以及错误信息里的回显——后者用 U+0332 标出出错字符，先剥记号再匹配。
+   双下标这类错误的回显只在 `message` 里，只看 HTML 会漏（1.2.3 修的就是这个）；
+2. **降级**——修不了的（括号不闭合、`\begin` 没有 `\end`）原样给出源码：
+   **块级**区域包成代码围栏，**行内**区域只去掉定界符。围栏是多行结构，用在行内会把
+   一条表格行切成三段，剩下的半行还会被当成新的行解析。
 
 **数学永远不会被删掉。** 最坏情况是读者看到公式源码（可复制、可恢复），而不是红字。
 猜结构性损坏等于替作者编造数学，这件事不做。
@@ -127,7 +131,7 @@ TLS 校验照样通过（`curl --resolve` 返回 404 而非 TLS 错误，证明�
 | 文件 | 断言 | 挡什么 |
 | --- | --- | --- |
 | `test/guard-test.mjs` | 60 | 判定与区域切分必须和渲染器一致；一处缺陷只许报告一次；提示词段按会话决定 |
-| `test/red-render-test.mjs` | 48 | 三类红（异常 / 无异常但带红 / 围栏内）都要被发现 |
+| `test/red-render-test.mjs` | 59 | 三类红（异常 / 无异常但带红 / 围栏内）都要被发现；回显从 HTML 与 message 两份账本里取 |
 | `test/e2e-test.mjs` | 39 | 对**原始 KaTeX**逐个区域核对判定：修好的真不红，没修的仍然红 |
 | `test/regression-test.mjs` | 23 | 已经发生过的缺陷不许复发（用例逐字引自真实会话记录） |
 | `test/wire-test.mjs` | 97 | 真实 DSH 会话里的线上形状；流式输出等于"整段一次修复" |
@@ -138,7 +142,7 @@ TLS 校验照样通过（`curl --resolve` 返回 404 而非 TLS 错误，证明�
 | `tools/live-path-test.mjs` | 28 | **验收**：装好的副本 + profile 的真实配置 + 宿主的挂载路径，坏答案真的变成干净文本 |
 | `test/katex.mjs` | — | oracle 自检：bundle 存在、hash 对、版本对 |
 
-合计 **10 个文件、594 条断言**，`npm test` 约 4 秒，全程不需要网络。
+合计 **10 个文件、596 条断言**，`npm test` 约 4 秒，全程不需要网络。
 
 ## 5. 真实会话里的两次事故（都已被回归测试钉住）
 

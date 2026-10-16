@@ -59,6 +59,12 @@ console.log('\n=== 3. recovery keeps the content visible ===')
 const recoverable = [
   ['\\foobar{x}', 'foobar{x}'],
   ['x = \\notacommand', 'x = notacommand'],
+  // A doubled subscript is recoverable — the renderer echoes exactly which part to group —
+  // but its echo lives in the MESSAGE, not in an <mtext> annotation, so the html-only
+  // reader saw null and this case fell through to the fence. Reported from a real answer,
+  // where the fence then cut a table row in half.
+  ['x_1_2', 'x_{1_2}'],
+  ['a_b_c', 'a_{b_c}'],
   ['\\begin{cases} \\bad & x \\ge t \\\\ b & x < t \\end{cases}', null],
   ['\\htmlClass{red}{x}', null],
 ]
@@ -73,15 +79,47 @@ for (const [tex, expect] of recoverable) {
   }
 }
 
+console.log('\n=== 3b. the echo is read from whichever account carries it ===')
+const subscriptVerdict = judge('x_1_2', false)
+check(
+  'the message account names the offending source',
+  echoedErrorText(subscriptVerdict.html, subscriptVerdict.message) === 'x_1_2',
+  `got ${JSON.stringify(echoedErrorText(subscriptVerdict.html, subscriptVerdict.message))}`,
+)
+check(
+  'the html account alone still cannot (this is the shape that used to be trusted)',
+  echoedErrorText(subscriptVerdict.html) === null,
+  `html-only read gave ${JSON.stringify(echoedErrorText(subscriptVerdict.html))}`,
+)
+const commandVerdict = judge('\\foobar{x}', false)
+check(
+  'for an unknown command both accounts agree',
+  echoedErrorText(commandVerdict.html, commandVerdict.message) === '\\foobar' && echoedErrorText(commandVerdict.html) === '\\foobar',
+  `html=${JSON.stringify(echoedErrorText(commandVerdict.html))} both=${JSON.stringify(echoedErrorText(commandVerdict.html, commandVerdict.message))}`,
+)
+
 console.log('\n=== 4. unrecoverable damage is fenced, never guessed ===')
-const unfixable = ['\\frac{1}{2', 'x_1_2', '\\begin{cases} a & b \\\\ c']
+// `x_1_2` used to sit in this list. It was here because the guard could not recover it,
+// and a test that asserts the current behaviour of a gap keeps the gap: grouping the
+// subscript is the author's own mathematics (`x_1_2` and `x_{1_2}` render the same thing),
+// so the recoverable list is where it belongs. What stays here is damage the echo cannot
+// drive a repair for, with the nested doubled subscript as the control: `x_1_2_3` fixes one
+// level and then stops, so it must degrade visibly rather than be guessed at twice.
+const unfixable = ['\\frac{1}{2', 'x_1_2_3', '\\begin{cases} a & b \\\\ c']
 for (const tex of unfixable) {
   const r = recoverRedRegion(tex, true)
   const out = repairText(`正文 $${tex}$ 结束`)
   check(`${JSON.stringify(tex)}: not reported as repaired`, !r.ok || renders(r.body, true).red === false)
   const dumped = renderAll(out.text)
   check(`${JSON.stringify(tex)}: the emitted text has no red`, dumped.red === 0, `${dumped.red} red span(s)`)
-  check(`${JSON.stringify(tex)}: the original source survives in the output`, out.text.includes(tex.trim()), 'source lost')
+  // The source has to reach the reader. For a display region that means the fenced block;
+  // for an INLINE one the delimiters are removed and the source stands as plain text, which
+  // is what keeps a table row on one line. Either way the formula is still readable.
+  check(
+    `${JSON.stringify(tex)}: the original source survives in the output`,
+    out.text.includes(tex.trim()),
+    `source lost from ${JSON.stringify(out.text)}`,
+  )
 }
 
 console.log('\n=== 5. healthy regions must not be touched ===')

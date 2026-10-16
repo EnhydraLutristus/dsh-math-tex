@@ -88,9 +88,13 @@ const brokenCases = [
     '\\frac{1}{2',
   ],
   [
+    // The doubled subscript is the one defect the guard REWRITES rather than reframes: the
+    // renderer echoed `x_1_2` and grouping the rest (`x_{1_2}`) is the same mathematics the
+    // author wrote, so the reader gets a rendered formula instead of a shout in red. What
+    // must survive is therefore the grouped form, not the broken spelling.
     'double subscript',
     '设 $x_1_2$ 表示坐标。',
-    'x_1_2',
+    'x_{1_2}',
   ],
   [
     'stray $ inside a display block',
@@ -148,6 +152,59 @@ check(
     repairedReal.includes('\\frac{0.04}{4}') &&
     repairedReal.includes('1.2196'),
   'a formula fragment is missing from the repaired text',
+)
+
+// ---------------------------------------------------------------------------
+console.log('\n=== C2. a repair must never break the Markdown structure around it ===\n')
+
+// Reported from a real session: the answer presented the double subscript `x_1_2` as a TABLE,
+// and the guard's fallback — a fenced block, which is a multi-line construct — landed inside a
+// table row. GFM ends the row where the block starts, so one cell became three fragments and
+// the red the guard was removing came back in the wreckage. Two separate defects produced that:
+// KaTeX echoes a DOUBLE SUBSCRIPT without the <mtext> wrapper the recovery path looked for, so
+// the recoverable case fell through to the fence; and the fence was emitted for an INLINE
+// region, where a block construct cannot belong.
+const tableCell = '| `x_1_2` | $x_1_2$ | 嵌套，$x_{1_2}$ |'
+const cellRepair = repairText(tableCell)
+
+check(
+  'a double subscript is repaired, not fenced',
+  cellRepair.text.includes('$x_{1_2}$'),
+  `emitted ${JSON.stringify(cellRepair.text)}`,
+)
+check(
+  'the repaired cell keeps the row on one line',
+  !cellRepair.text.includes('\n'),
+  `the replacement introduced a line break: ${JSON.stringify(cellRepair.text)}`,
+)
+check(
+  'the table row still has all three cells',
+  (cellRepair.text.match(/\|/g) ?? []).length >= 4,
+  `the row lost cells: ${JSON.stringify(cellRepair.text)}`,
+)
+check(
+  'the repaired cell contains no rejected region',
+  findMathRegions(cellRepair.text).every((r) => inspect(r).verdict === 'ok'),
+  `still rejected: ${JSON.stringify(findMathRegions(cellRepair.text).map((r) => inspect(r).reason))}`,
+)
+
+// The same rule for a region that CANNOT be recovered: inline framing must stay inline.
+const inlineHopeless = '| 公式 | 说明 |\n| --- | --- |\n| $\\frac{1}{2$ | 未闭合 |'
+const inlineRepair = repairText(inlineHopeless)
+check(
+  'an unrecoverable INLINE region is not fenced either',
+  !inlineRepair.text.includes('```'),
+  `a block fence landed inside the table: ${JSON.stringify(inlineRepair.text)}`,
+)
+check(
+  'the unrecoverable inline source is still shown',
+  inlineRepair.text.includes('\\frac{1}{2'),
+  `the source was dropped: ${JSON.stringify(inlineRepair.text)}`,
+)
+check(
+  'the unrecoverable inline region leaves no newlines behind',
+  !inlineRepair.text.includes('\n\n'),
+  `blank lines were introduced: ${JSON.stringify(inlineRepair.text)}`,
 )
 
 // ---------------------------------------------------------------------------
