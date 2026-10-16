@@ -98,7 +98,7 @@ Set options by id from the profile's `cordis.patch.yml`:
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `enabled` | `true` | `false` mounts neither defence |
-| `promptRules` | `auto` | `auto` injects only into a session that already carries math / `full` injects all seven rules everywhere / `minimal` keeps just the two that prevent red / `off` injects nothing |
+| `promptRules` | `auto` | `auto` injects only into a session that already carries math / `full` injects all eight rules everywhere / `minimal` keeps just the two that prevent red / `off` injects nothing |
 | `repair` | `auto` | `auto` rewrites; `check-only` logs without rewriting; `off` passes everything |
 | `tailBuffer` | `15` | Smallest suffix held back, so a completion marker cannot leak character by character |
 | `maxHold` | `600` | Longest a single unclosed region may wait; past it the text is released unrepaired (better to do nothing than to stall) |

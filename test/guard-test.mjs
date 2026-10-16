@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { repairText, findMathRegions, inspect, judge, inspectText, loadOracle } from '../lib/tex-repair.js'
-import { createBlockState, guardStream, apply, TOKEN } from '../lib/guard.js'
+import { createBlockState, guardStream, apply, TOKEN, RAW_HTML } from '../lib/guard.js'
 
 /**
  * Feed `text` through the real streaming path and collect every log line.
@@ -465,6 +465,103 @@ const proseTurn = {
   const host = await mountPromptHost({ promptRules: 'auto' })
   await passRequest(host.listeners[0].handler, { model: 'test', messages: [] })
   check('a request the guard cannot read does not throw or mark', host.assemble() === '', JSON.stringify(host.assemble().slice(0, 40)))
+}
+
+// ---------------------------------------------------------------------------
+// === G. raw HTML in an answer is reported, never edited ===
+//
+// Found on a real answer (`session-4f7db52f`) the user described as 「非常乱」: asked to keep
+// a comparison table on one line, the model emitted `<ol><li>…</li></ol>` and `<b>` tags.
+// The chat surface renders Markdown, so every tag reached the reader as literal text. The
+// guard runs no HTML repair by design — it rewrites TeX it can prove is broken and must not
+// start editing prose — so the defect must at least be visible in the log.
+console.log('\n=== G. raw HTML is reported, not edited ===\n')
+
+{
+  const html = '这是对比：\n\n<ol><li><b>方法 A</b>：$x_1_2$ 快</li><li><b>方法 B</b>：慢</li></ol>\n\n就这些。'
+  const lines = []
+  const state = createBlockState({ log: (l) => lines.push(l), repairMode: 'auto' })
+  let out = ''
+  for (let i = 0; i < html.length; i += 5) out += state.push(html.slice(i, i + 5))
+  out += state.finish()
+  const htmlLogs = lines.filter((l) => /raw HTML/.test(l))
+  check('an answer carrying HTML is reported once', htmlLogs.length === 1, JSON.stringify(lines))
+  check('the HTML itself is passed through untouched', out.includes('<ol><li><b>方法 A</b>'), JSON.stringify(out.slice(0, 60)))
+  check('the formula beside it is still repaired', out.includes('$x_{1_2}$'), JSON.stringify(out.slice(-40)))
+
+  const plain = createBlockState({ log: () => {}, repairMode: 'auto' })
+  let plainOut = ''
+  for (const chunk of ['没有任何标签的正文。\n\n', '数学 $a<b$ 与 $c>d$ 的比较。\n\n', '代码 `for (let i=0; i<n; i++)` 结束。']) {
+    plainOut += plain.push(chunk)
+  }
+  plainOut += plain.finish()
+  check('prose, inequalities and code spans are not mistaken for tags', !RAW_HTML.test(plainOut), JSON.stringify(plainOut.match(RAW_HTML)?.[0]))
+}
+
+{
+  // The HTML check is a detector, not a filter: it must not change one byte of the answer.
+  const html = '<div>一段</div>\n\n正文。\n'
+  const withLint = []
+  const st = createBlockState({ log: (l) => withLint.push(l), repairMode: 'auto' })
+  let got = ''
+  for (let i = 0; i < html.length; i += 4) got += st.push(html.slice(i, i + 4))
+  got += st.finish()
+  check('detection does not alter the emitted answer', got === html, JSON.stringify(got))
+}
+
+{
+  // Every element on the list is matched, and none of the near-misses are.
+  //
+  // The near-misses are the ones that actually cost time here: `$a<b$ 与 $c>d$` was matched
+  // as the tag `<b$ 与 $c>` by the first version of this pattern, and `<T>`/`<DIV>` are how
+  // code is discussed, not how HTML is written — the recorded corpus (535 answers, 8 with
+  // HTML) contains lowercase tags only.
+  const yes = [
+    '<ol>',
+    '</ol>',
+    '<li>x</li>',
+    '<b>x</b>',
+    '</b>',
+    '<i>斜体</i>',
+    '<p>段落</p>',
+    '<br/>',
+    '<br />',
+    '<div class="x">',
+    '<span class="katex-error" title="x">',
+    '<table>',
+    '<td colspan="2">',
+    '<h3>',
+    '<blockquote>',
+    '<pre>',
+    '<code>',
+    '<hr>',
+    '<img src="a.png">',
+    '</b >',
+  ]
+  const no = [
+    '<x>',
+    '<T>',
+    '<DIV>',
+    '<B>粗</B>',
+    'a<b',
+    'a < b > c',
+    '$a<b$',
+    '$a<b$ 与 $c>d$',
+    'list: <1,2,3>',
+    'x <n and y >m',
+    '5<6>7',
+  ]
+  const unmatched = yes.filter((t) => !RAW_HTML.test(t))
+  const matched = no.filter((t) => RAW_HTML.test(t))
+  check('every listed element is detected', unmatched.length === 0, JSON.stringify(unmatched))
+  check('no near-miss is detected', matched.length === 0, JSON.stringify(matched))
+
+  // A tag inside a code span is still reported. It reaches the reader as literal text, and
+  // the four answers in the recorded corpus that quote tags this way are quoting code — the
+  // report is one line per block, so saying it is cheaper than teaching the detector Markdown.
+  const quoted = ['`<b>` 是一个标签', '```html\n<div class="x"></div>\n```']
+  const missed = quoted.filter((t) => !RAW_HTML.test(t))
+  check('a tag quoted inside a code span is still reported', missed.length === 0, JSON.stringify(missed))
 }
 
 // ---------------------------------------------------------------------------

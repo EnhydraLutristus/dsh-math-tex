@@ -74,7 +74,7 @@ node tools/install.mjs --uninstall  # 从 bundle 列表移除
 | 选项 | 默认 | 说明 |
 | --- | --- | --- |
 | `enabled` | `true` | `false` 时两道防线都不挂载 |
-| `promptRules` | `auto` | `auto` 只给已经出现过数学的会话注入 / `full` 每个会话都注入完整七条 / `minimal` 只留防红字的两条 / `off` 不注入 |
+| `promptRules` | `auto` | `auto` 只给已经出现过数学的会话注入 / `full` 每个会话都注入完整八条 / `minimal` 只留防红字的两条 / `off` 不注入 |
 | `repair` | `auto` | `auto` 改写 / `check-only` 只记日志不改写 / `off` 完全放行 |
 | `tailBuffer` | `15` | 最少扣住多少个字符，避免完成记号被逐字泄漏 |
 | `maxHold` | `600` | 单个未闭合区域最多等多少字符，超了就原样放行（宁可不管，不可卡住） |
