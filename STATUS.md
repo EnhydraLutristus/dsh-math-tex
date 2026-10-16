@@ -1,6 +1,6 @@
 # dsh-math-tex — 当前状态（可交接）
 
-包名 `dsh-math-tex` 1.2.6。**仓库根目录就是包根目录**（checkout 在
+包名 `dsh-math-tex` 1.2.7。**仓库根目录就是包根目录**（checkout 在
 `default-workspace\dsh-math-tex\`，workspace 里现在只剩这一个项目，其余全在
 `default-workspace\_archive\`）。装到
 `%USERPROFILE%\.dsh\profiles\desktop\node_modules\dsh-math-tex\`，
@@ -23,7 +23,7 @@
 node tools/install.mjs                            # 复制 payload + 登记 bundle（幂等）
 node tools/install.mjs --dry-run                  # 只说会改什么
 node tools/install.mjs --uninstall dsh-math-tex   # 反安装（可指定别的包名）
-npm test                                          # 10 个测试文件，632 条断言
+npm test                                          # 10 个测试文件，644 条断言
 ```
 
 `tools/install.mjs` 里所有路径都由 `import.meta.url` 推出来，checkout 放在哪都能跑；
@@ -134,7 +134,7 @@ TLS 校验照样通过（`curl --resolve` 返回 404 而非 TLS 错误，证明�
 
 | 文件 | 断言 | 挡什么 |
 | --- | --- | --- |
-| `test/guard-test.mjs` | 71 | 判定与区域切分必须和渲染器一致；一处缺陷只许报告一次；修复不许破坏周围的 Markdown 结构；释放点不许落进未闭合的行内代码（否则整段回答被吞） |
+| `test/guard-test.mjs` | 83 | 判定与区域切分必须和渲染器一致；一处缺陷只许报告一次；修复不许破坏周围的 Markdown 结构；释放点不许落进未闭合的行内代码（否则整段回答被吞）；裸 HTML 的日志在标签被切分到多次释放时也要报出 |
 | `test/red-render-test.mjs` | 71 | 三类红（异常 / 无异常但带红 / 围栏内）都要被发现；回显从 HTML 与 message 两份账本里取，红渲染没有 message 时取画出来的 span |
 | `test/e2e-test.mjs` | 39 | 对**原始 KaTeX**逐个区域核对判定：修好的真不红，没修的仍然红 |
 | `test/regression-test.mjs` | 23 | 已经发生过的缺陷不许复发（用例逐字引自真实会话记录） |
@@ -146,7 +146,7 @@ TLS 校验照样通过（`curl --resolve` 返回 404 而非 TLS 错误，证明�
 | `tools/live-path-test.mjs` | 28 | **验收**：装好的副本 + profile 的真实配置 + 宿主的挂载路径，坏答案真的变成干净文本 |
 | `test/katex.mjs` | — | oracle 自检：bundle 存在、hash 对、版本对 |
 
-合计 **10 个文件、632 条断言**，`npm test` 约 4 秒，全程不需要网络。
+合计 **10 个文件、644 条断言**，`npm test` 约 4 秒，全程不需要网络。
 
 ## 5. 真实会话里的两次事故（都已被回归测试钉住）
 
@@ -259,6 +259,39 @@ cordis 解析一个 entry 的配置走 `resolveConfig(runtime, config)`，里面
 **验收**：那次真实回答现在出站 **2204/2213** 字（差额是公式改写本身：`$x_1_2$` → `$x_{1_2}$`
 多出的花括号），199 行 holding 归零；四轮全部 0 行 holding、0 处红色残留。
 `test/guard-test.mjs` 新增 E2 节、`test/wire-test.mjs` 新增 D2 节把它钉住（共 10 条断言）。
+
+## 7d. 1.2.6 的检测器一次都没响过（2026-10-16，1.2.7 修复）
+
+1.2.6 上线后让用户跑一轮验收（`test/fixtures/live-check-prompt.md`）。那一轮**回答干净**，
+但顺手把所有带标签的真实回答重放一遍验证检测器时，发现它**一次都没报**——
+包括 1.2.6 交付时用来证明"能报"的那两条。
+
+原因是检测的**输入取错了**：1.2.6 拿"这次新释放的那一片"去匹配 `RAW_HTML`，
+而一片可以只装半个标签。实测 `session-134bbd9f` 的回答是按 7 字符增量到达的：
+
+```
+piece [594,601) = "rn <spa"
+piece [601,608) = "n class"
+piece [608,615) = "Name=\"k"      …
+```
+
+`<span …>` 被切在多次释放之间，没有任何一片同时含开头与闭口的 `>`，于是**一行日志都没有**。
+1.2.6 交付时用全量一次性喂入做验证，恰好绕开了这个形状；改成按 7 字符喂入立刻复现
+（`released pieces=217, pieces containing a tag=0`，而输出与原文逐字节相同——文字没坏，坏的是检测）。
+第二个形状是标签压在最后几个字符里（`session-e902866d`），它们从 `finish` 出去，
+只查 `push` 的写法同样看不见。
+
+**修法**：`reportHtmlOnce` 拿到的是**累积到此刻的整段修复文本**（`settle` 里传 `repaired`，
+而 `settle` 是包括 `finish` 在内的唯一释放闸门）。累积文本对两种形状都免疫，也不会误报：
+`RAW_HTML` 要求闭口的 `>`，半截 `<spa` 只是等下一次释放。
+
+**验收**：`tools/replay-html-check.mjs --all` 把全机 **10 条**带标签的真实回答重放一遍，
+10/10 各报一行、0 行 holding、输出与原文逐字节相同（`0 without the expected report`）。
+`test/guard-test.mjs` 补两条断言（按 7 字符 / 9 字符喂入，标签被拆开仍要报一次、
+标签落在尾部由 `finish` 报出），两条都要求答案逐字节不变。
+
+**教训**：验证一个"只能在流式路径上工作"的检查，必须用**真实的分块形状**喂它。
+一次性喂全量会把流式缺陷全部藏起来——1.2.5 的释放缺陷也是靠 7 字一块喂才露出来的（见 7c）。
 
 ## 7b. 仍然没证明的
 

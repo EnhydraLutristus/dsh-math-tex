@@ -510,6 +510,42 @@ console.log('\n=== G. raw HTML is reported, not edited ===\n')
 }
 
 {
+  // Two shapes the first version of this check missed, both taken from replayed answers
+  // (`tools/replay-html-check.mjs` over the 10 recorded answers that carry tags):
+  //
+  //   session-134bbd9f — the answer arrived in 7-character deltas and its `<span …>` was
+  //   released as `"rn <spa"`, `"n class"`, … so no single released piece ever held a whole
+  //   tag. A check that inspected the piece reported nothing.
+  //   session-e902866d — the tag sits in the last few characters, which leave through
+  //   `finish`, so a check that only ran on `push` never saw it.
+  const splitLines = []
+  const split = createBlockState({ log: (l) => splitLines.push(l), repairMode: 'auto' })
+  const splitText = '先给一段足够长的正文，把释放推起来。\n\n<span class="hljs-keyword">case</span>\n\n后面还有正文。'
+  let splitOut = ''
+  for (let i = 0; i < splitText.length; i += 7) splitOut += split.push(splitText.slice(i, i + 7))
+  splitOut += split.finish()
+  check(
+    'a tag split across releases is still reported',
+    splitLines.filter((l) => /raw HTML/.test(l)).length === 1,
+    JSON.stringify(splitLines),
+  )
+  check('the split answer arrives whole', splitOut === splitText, JSON.stringify(splitOut.length))
+
+  const tailLines = []
+  const tail = createBlockState({ log: (l) => tailLines.push(l), repairMode: 'auto' })
+  const tailText = '正文在前，标签压在最后几个字符里：<b>加油</b>'
+  let tailOut = ''
+  for (let i = 0; i < tailText.length; i += 9) tailOut += tail.push(tailText.slice(i, i + 9))
+  tailOut += tail.finish()
+  check(
+    'a tag in the tail is reported by finish',
+    tailLines.filter((l) => /raw HTML/.test(l)).length === 1,
+    JSON.stringify(tailLines),
+  )
+  check('the tail answer arrives whole', tailOut === tailText, JSON.stringify(tailOut.length))
+}
+
+{
   // Every element on the list is matched, and none of the near-misses are.
   //
   // The near-misses are the ones that actually cost time here: `$a<b$ 与 $c>d$` was matched
