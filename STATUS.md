@@ -1,6 +1,6 @@
 # dsh-math-tex — 当前状态（可交接）
 
-包名 `dsh-math-tex` 1.2.8。**仓库根目录就是包根目录**（checkout 在
+包名 `dsh-math-tex` 1.2.9。**仓库根目录就是包根目录**（checkout 在
 `default-workspace\dsh-math-tex\`，workspace 里现在只剩这一个项目，其余全在
 `default-workspace\_archive\`）。装到
 `%USERPROFILE%\.dsh\profiles\desktop\node_modules\dsh-math-tex\`，
@@ -23,7 +23,7 @@
 node tools/install.mjs                            # 复制 payload + 登记 bundle（幂等）
 node tools/install.mjs --dry-run                  # 只说会改什么
 node tools/install.mjs --uninstall dsh-math-tex   # 反安装（可指定别的包名）
-npm test                                          # 10 个测试文件，648 条断言
+npm test                                          # 10 个测试文件，652 条断言
 ```
 
 `tools/install.mjs` 里所有路径都由 `import.meta.url` 推出来，checkout 放在哪都能跑；
@@ -193,7 +193,7 @@ TLS 校验照样通过。`.tools\git.ps1` 就是这件事加三次重试。
 | `test/red-render-test.mjs` | 68 | 三类红（异常 / 无异常但带红 / 围栏内）都要被发现；回显从 HTML 与 message 两份账本里取，红渲染没有 message 时取画出来的 span |
 | `test/e2e-test.mjs` | 39 | 对**原始 KaTeX**逐个区域核对判定：修好的真不红，没修的仍然红 |
 | `test/regression-test.mjs` | 23 | 已经发生过的缺陷不许复发（用例逐字引自真实会话记录） |
-| `test/wire-test.mjs` | 103 | 真实 DSH 会话里的线上形状；流式输出等于"整段一次修复" |
+| `test/wire-test.mjs` | 107 | 真实 DSH 会话里的线上形状；流式输出等于"整段一次修复"；超过 `maxHold` 的块整段到达、冻结后不再修复 |
 | `test/fuzz-test.mjs` | 236 | 随机切分 + 随机损坏，不变量：任何切法都不留下红区 |
 | `test/config-test.mjs` | 34 | 选项解析与手写校验；**以及 loader 真正读的那个 `Config` 导出**；`full` 带引用规则、`minimal` 不带 |
 | `test/smoke-test.mjs` | 23 | 挂载、再导出、日志、提示词段已注册 |
@@ -201,7 +201,7 @@ TLS 校验照样通过。`.tools\git.ps1` 就是这件事加三次重试。
 | `tools/live-path-test.mjs` | 28 | **验收**：装好的副本 + profile 的真实配置 + 宿主的挂载路径，坏答案真的变成干净文本 |
 | `test/katex.mjs` | — | oracle 自检：bundle 存在、hash 对、版本对 |
 
-合计 **10 个文件、648 条断言**，`npm test` 约 4 秒，全程不需要网络。
+合计 **10 个文件、652 条断言**，`npm test` 约 4 秒，全程不需要网络。
 
 ## 5. 真实会话里的两次事故（都已被回归测试钉住）
 
@@ -347,6 +347,44 @@ piece [608,615) = "Name=\"k"      …
 
 **教训**：验证一个"只能在流式路径上工作"的检查，必须用**真实的分块形状**喂它。
 一次性喂全量会把流式缺陷全部藏起来——1.2.5 的释放缺陷也是靠 7 字一块喂才露出来的（见 7c）。
+
+## 7e. `maxHold` 的阀会把它后面的字丢光（2026-10-17，1.2.9 修复）
+
+`safeCut` 里有一句注释写着"there is no way to repair a region that is still open — the
+release is verbatim"。1.2.9 之前的代码**没有做到这句**：`maxHold` 触发时它确实放行了（切在
+缓冲区末尾，把半个公式也放出去），但紧接着 `settle()` 把这段文本当成完整的来修，于是那个还
+没闭合的 `$$` 区域被"修好"——补齐成 `\n\n$$\n…\n$$\n\n` 发出去。真正的闭合 `$$` 到达后，
+整段重新修复的结果里不再需要那个围栏，与已发出去的文本不再是前缀关系，`settle()`
+每次都说 `repair would rewrite emitted text; holding N chars` 并把 `pending` 留着；
+`finish()` 收尾时调的仍是 `settle()`，同样拒绝，于是**剩下的字一直扣到流结束、永远不出现**。
+
+实测（造例：一段 804 字的未闭合 `$$` 块，按 7 字符喂入）：播出的文本在 **610** 字处停住，
+194 字丢失；日志里 1 条
+`unclosed region after 600 chars (maxHold); releasing the rest of this block unrepaired`、
+**0** 条 `holding`——拒绝发生在 `onLog` 之外，所以日志看起来一切正常。
+
+**修法**：把"放行"和"修复"解耦。`maxHold` 那一次释放同时**冻结**这个块：`settle` 交付的
+`frozenPrefix + whole.slice(noRepairFrom)`，冻结点之后的原文**永不参与修复**，因此每次交付
+都还是下一次计算的严格前缀，`settle` 不再有拒绝的理由。`finish()` 另加兜底：万一仍有扣住
+的尾巴，原样发出并记 `tail of N chars could not be released as repaired; emitting it
+verbatim`。**丢字不再是选项，退让的只是"不再修"。**
+
+**验收**：6 种形状（含 806 字未闭合行内公式、1201 字纯散文）× 4 种分块（1/7/64/997）×
+
+- `auto` / `check-only` 两种模式跑：`NO LOSS IN ANY SHAPE`，0 条 `holding`，冻结最多 1 次。
+- `test/wire-test.mjs` 新增 D2 节 4 条断言，103 → 107。
+- `tools/find-leftover.mjs`（新工具）：全机 **550** 条回答，13 条需要修复，**修复后 0 条仍
+  带红区**——这是"修复是否收敛"的语料级检查，也是上面那条已知不收敛的取证方式。
+
+**已知的不收敛**：`这行是 $$$ 不是公式。`——中间 `$` 开区域、末尾 `$` 立刻闭合，修复后留下
+`$$ 不是公式。` 仍未闭合，再修一次会把它围成代码块。**不修**，因为全机 550 条回答里
+三连美元号出现 **0** 次（`tools/find-leftover.mjs --triple`），改它的风险比缺陷大；形状与
+理由记在工具注释里。
+
+**教训**：`maxHold` 这类"安全阀"必须让**下游假设随之改变**，而不只是把切片送出去——
+代码里那句注释（"release is verbatim"）就是被违反的规格。基于"文本前缀只会变长、
+修复结果对前缀稳定"做流式释放的，一旦中间某段被改成"修过的形态"，前缀性质就破了；
+正确做法是把这段从修复的输入里**摘掉**，而不是修完再发。
 
 ## 7b. 仍然没证明的
 

@@ -191,6 +191,32 @@ console.log('\n=== D. holdback behaviour ===')
   const small = createBlockState()
   const heldSmall = small.push('说明文字。\n\n$$\n\\frac12')
   check('a small unclosed region is still withheld', !heldSmall.includes('\\frac12'), JSON.stringify(heldSmall))
+
+  // The valve must release the rest of the block UNREPAIRED, and keep releasing it. An
+  // earlier version released the half-open region *repaired*: the repair inserted the
+  // missing `$$` (or fenced a valid formula as code), the real closing `$$` then no longer
+  // extended what was on screen, `settle` refused every later release and `finish` dropped
+  // the tail. Measured on an 804-character block in 7-character deltas: 610 of 804
+  // characters delivered, the `$$` block turned into a code fence.
+  const frozenLogs = []
+  const frozen = createBlockState({ log: (line) => frozenLogs.push(line) })
+  const longBlock = `${prose}\n\n$$\n${'x'.repeat(700)}\n$$\n后面还有正文。\n`
+  let frozenOut = ''
+  for (let i = 0; i < longBlock.length; i += 7) frozenOut += frozen.push(longBlock.slice(i, i + 7))
+  frozenOut += frozen.finish()
+  check('an oversized unclosed block arrives whole, not truncated', frozenOut === longBlock, `${frozenOut.length} of ${longBlock.length} chars`)
+  check('the frozen block keeps its own source instead of being re-framed', frozenOut.includes(`$$\n${'x'.repeat(700)}\n$$`))
+  check('the freeze is reported exactly once', frozenLogs.filter((l) => l.includes('maxHold')).length === 1, JSON.stringify(frozenLogs))
+
+  // The cost of the valve is deliberate: after it opens, the rest of THIS block keeps its raw
+  // source, so a later broken region stays as the model wrote it. Pinned so that "fixing" it
+  // by repairing the tail cannot come back without reintroducing the lost text.
+  const frozenTail = createBlockState()
+  let tailOut = ''
+  const tailRaw = `${prose}\n\n$$\n${'x'.repeat(700)}\n$$\n然后是 $x_1_2$ 结尾。\n`
+  for (let i = 0; i < tailRaw.length; i += 7) tailOut += frozenTail.push(tailRaw.slice(i, i + 7))
+  tailOut += frozenTail.finish()
+  check('after a freeze the tail still arrives, unrepaired', tailOut === tailRaw, `${tailOut.length} of ${tailRaw.length} chars`)
 }
 
 console.log('\n=== D2. a release may not land inside an unclosed code span ===')

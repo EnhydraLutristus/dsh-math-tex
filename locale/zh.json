@@ -7,7 +7,7 @@
     "promptRules": "规则注入给谁：auto（只给对话里已经出现过数学的会话）| full（每个会话）| minimal | off。",
     "repair": "auto 改写有问题的区域；check-only 只记日志；off 完全放行。",
     "tailBuffer": "最少扣住的尾部字符数，避免完成记号被逐字泄漏。",
-    "maxHold": "单个未闭合公式区域最多等多少字符，超限就原样放行。",
+    "maxHold": "单个未闭合公式区域最多等多少字符，超限就把它原样放行、并且这一块从此不再修复。",
     "logFile": "诊断日志路径。留空则只写宿主 logger。",
     "katexPath": "指定用于判定的 KaTeX 位置；默认按 profile 自动解析。",
     "macros": "传给渲染器的宏，用于与客户端行为保持一致。"

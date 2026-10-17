@@ -7,7 +7,7 @@
     "promptRules": "Who receives the formatting rule set: auto (only a session whose conversation already carries math) | full (every session) | minimal | off.",
     "repair": "auto rewrites a broken region; check-only logs it; off passes everything through.",
     "tailBuffer": "Smallest suffix of text held back so a completion marker cannot leak character by character.",
-    "maxHold": "Longest a single unclosed math region may wait before the text is released unrepaired.",
+    "maxHold": "Longest a single unclosed math region may wait before the block is released unrepaired and kept unrepaired to its end.",
     "logFile": "Diagnostic log path. Empty means the host logger only.",
     "katexPath": "Pin the KaTeX build used for judging; by default it is resolved from the host profile.",
     "macros": "Macros handed to the renderer, to match the client's behaviour."

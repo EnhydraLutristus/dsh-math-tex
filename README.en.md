@@ -101,7 +101,7 @@ Set options by id from the profile's `cordis.patch.yml`:
 | `promptRules` | `auto` | `auto` injects only into a session that already carries math / `full` injects all nine rules everywhere / `minimal` keeps just the two that prevent red / `off` injects nothing |
 | `repair` | `auto` | `auto` rewrites; `check-only` logs without rewriting; `off` passes everything |
 | `tailBuffer` | `15` | Smallest suffix held back, so a completion marker cannot leak character by character |
-| `maxHold` | `600` | Longest a single unclosed region may wait; past it the text is released unrepaired (better to do nothing than to stall) |
+| `maxHold` | `600` | Longest a single unclosed region may wait; past it the block is released unrepaired and stays unrepaired to its end (better to do nothing than to stall) |
 | `logFile` | `''` | Diagnostic log path; empty means the host logger only |
 | `katexPath` | `''` | Pin the renderer; by default it is resolved from the profile |
 | `macros` | `{}` | Macros handed to the renderer, to match the client's behaviour |
@@ -140,7 +140,7 @@ npm test
 | `regression-test` | do fixed defects stay fixed? (cases quoted verbatim from real sessions) | 23 |
 | `live-path-test` | **acceptance**: installed copy + the profile's real config + the host's mount path — does a broken answer actually become clean text? | 28 |
 
-648 assertions across 10 files, about 4 seconds, no network.
+652 assertions across 10 files, about 4 seconds, no network.
 
 `fuzz-test` is the strongest instrument: it requires **any** chunking of the real incident —
 one character per frame up to 1600, plus random splittings — to reassemble byte-identically
