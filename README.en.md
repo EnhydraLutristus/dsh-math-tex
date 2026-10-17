@@ -98,7 +98,7 @@ Set options by id from the profile's `cordis.patch.yml`:
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `enabled` | `true` | `false` mounts neither defence |
-| `promptRules` | `auto` | `auto` injects only into a session that already carries math / `full` injects all eight rules everywhere / `minimal` keeps just the two that prevent red / `off` injects nothing |
+| `promptRules` | `auto` | `auto` injects only into a session that already carries math / `full` injects all nine rules everywhere / `minimal` keeps just the two that prevent red / `off` injects nothing |
 | `repair` | `auto` | `auto` rewrites; `check-only` logs without rewriting; `off` passes everything |
 | `tailBuffer` | `15` | Smallest suffix held back, so a completion marker cannot leak character by character |
 | `maxHold` | `600` | Longest a single unclosed region may wait; past it the text is released unrepaired (better to do nothing than to stall) |
@@ -140,7 +140,7 @@ npm test
 | `regression-test` | do fixed defects stay fixed? (cases quoted verbatim from real sessions) | 23 |
 | `live-path-test` | **acceptance**: installed copy + the profile's real config + the host's mount path — does a broken answer actually become clean text? | 28 |
 
-646 assertions across 10 files, about 4 seconds, no network.
+648 assertions across 10 files, about 4 seconds, no network.
 
 `fuzz-test` is the strongest instrument: it requires **any** chunking of the real incident —
 one character per frame up to 1600, plus random splittings — to reassemble byte-identically

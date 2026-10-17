@@ -1,6 +1,6 @@
 # dsh-math-tex — 当前状态（可交接）
 
-包名 `dsh-math-tex` 1.2.7。**仓库根目录就是包根目录**（checkout 在
+包名 `dsh-math-tex` 1.2.8。**仓库根目录就是包根目录**（checkout 在
 `default-workspace\dsh-math-tex\`，workspace 里现在只剩这一个项目，其余全在
 `default-workspace\_archive\`）。装到
 `%USERPROFILE%\.dsh\profiles\desktop\node_modules\dsh-math-tex\`，
@@ -23,7 +23,7 @@
 node tools/install.mjs                            # 复制 payload + 登记 bundle（幂等）
 node tools/install.mjs --dry-run                  # 只说会改什么
 node tools/install.mjs --uninstall dsh-math-tex   # 反安装（可指定别的包名）
-npm test                                          # 10 个测试文件，646 条断言
+npm test                                          # 10 个测试文件，648 条断言
 ```
 
 `tools/install.mjs` 里所有路径都由 `import.meta.url` 推出来，checkout 放在哪都能跑；
@@ -120,9 +120,10 @@ TLS 校验照样通过。`.tools\git.ps1` 就是这件事加三次重试。
 ## 1. 它做两件事，互相独立
 
 1. **预防** —— `systemPrompt.section({ name: 'math-output-format', order: 1000 })`
-   注入八条中文排版规则（行间公式单独成段、块内不得有标题/正文/粗体、一块一公式、
+   注入九条中文排版规则（行间公式单独成段、块内不得有标题/正文/粗体、一块一公式、
    标题不得与公式同行、行内公式不超过约 160 字符、不用 HTML 标签排版、
-   结尾用纯文本重述数值、最后单独输出哨兵 `⟪MG-REPAIR⟫` 作为"规则已生效"的收据）。
+   讨论公式写法本身时把每个写法放进反引号、结尾用纯文本重述数值、
+   最后单独输出哨兵 `⟪MG-REPAIR⟫` 作为"规则已生效"的收据）。
 
    **注入给谁由 `promptRules` 决定，默认 `auto`**：只给对话里已经出现过数学的会话。
    判据是 `llm/stream` 里那次请求的 `options.messages`（含 `$`、`\(`、`\[`、`\begin{`
@@ -132,10 +133,17 @@ TLS 校验照样通过。`.tools\git.ps1` 就是这件事加三次重试。
    标记发生在请求组装之后，所以**携带数学的那一次请求本身还没有规则**，下一步才生效——
    刻意如此：在回合中途改前缀，比晚一步贵。
 
-   `full` 仍然给每个会话注入八条，`minimal`、`off` 语义不变。修不修跟这个选项无关：
+   `full` 仍然给每个会话注入九条，`minimal`、`off` 语义不变。修不修跟这个选项无关：
    无论 `promptRules` 取什么值，`llm/stream` 的检查都在跑。
 
-   > 八条规则里倒数第二条（不用 HTML 标签）是 1.2.6 加的：模型在被要求"把对比表压成
+   > 第九条（讨论公式写法本身时用反引号包住）是 1.2.8 加的：实测会话
+   > `session-ae727c2a` 里，用户让模型用 HTML 标签写三条对比，模型把
+   > `<b>$x_1_2$</b>` 写成不带反引号的公式，守卫按契约把这个"故意写错的例子"
+   > 修成了 `$x_{1_2}$`——于是第①条和第②条长得一模一样，一个说报红一个说不报红。
+   > 实测另一次同样问题的回答（`session-ae727c2a` 的上一轮）把三个写法都放进反引号，
+   > 守卫一个字都没动。所以补的是"写法本身要被引用"，不是让守卫学会读心。
+
+   > 第八条（不用 HTML 标签）是 1.2.6 加的：模型在被要求"把对比表压成
    > 一行"时直接写了 `<ol><li><b>`，而这里渲染的是 Markdown，标签原样显示成文字。
    > 日志侧的 `RAW_HTML` 检查只报不改——正文是模型的东西，静默改写它比露出标签更糟。
 
@@ -187,13 +195,13 @@ TLS 校验照样通过。`.tools\git.ps1` 就是这件事加三次重试。
 | `test/regression-test.mjs` | 23 | 已经发生过的缺陷不许复发（用例逐字引自真实会话记录） |
 | `test/wire-test.mjs` | 103 | 真实 DSH 会话里的线上形状；流式输出等于"整段一次修复" |
 | `test/fuzz-test.mjs` | 236 | 随机切分 + 随机损坏，不变量：任何切法都不留下红区 |
-| `test/config-test.mjs` | 32 | 选项解析与手写校验；**以及 loader 真正读的那个 `Config` 导出** |
+| `test/config-test.mjs` | 34 | 选项解析与手写校验；**以及 loader 真正读的那个 `Config` 导出**；`full` 带引用规则、`minimal` 不带 |
 | `test/smoke-test.mjs` | 23 | 挂载、再导出、日志、提示词段已注册 |
 | `test/installed-test.mjs` | 11 | 装到 profile 的那份与源码一致、且真能用 |
 | `tools/live-path-test.mjs` | 28 | **验收**：装好的副本 + profile 的真实配置 + 宿主的挂载路径，坏答案真的变成干净文本 |
 | `test/katex.mjs` | — | oracle 自检：bundle 存在、hash 对、版本对 |
 
-合计 **10 个文件、646 条断言**，`npm test` 约 4 秒，全程不需要网络。
+合计 **10 个文件、648 条断言**，`npm test` 约 4 秒，全程不需要网络。
 
 ## 5. 真实会话里的两次事故（都已被回归测试钉住）
 

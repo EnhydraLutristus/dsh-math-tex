@@ -208,6 +208,15 @@ console.log('\nprompt rules\n')
     assert.ok(typeof text === 'function' ? text(sectionContext()) : text.includes('结论数值'), 'the full rules mention the conclusion rule')
     assert.ok(typeof text === 'function' ? text(sectionContext()).includes(TOKEN) : text.includes(TOKEN), 'the full rules carry the receipt marker')
   })
+  // 1.2.8: a formula that is the SUBJECT of the answer must be quoted, or the guard repairs the
+  // example itself. Measured on session-ae727c2a: the model was asked to emit HTML, wrote
+  // `<b>$x_1_2$</b>`, and the guard turned the deliberately-wrong sample into `$x_{1_2}$`, so
+  // items ① and ② ended up identical while claiming opposite verdicts.
+  const fullText = typeof full.sections[0].text === 'function' ? full.sections[0].text(sectionContext()) : full.sections[0].text
+  check('the full rules ask for a formula being discussed to be quoted', () => {
+    assert.ok(fullText.includes('故意写错的例子'), 'the quoting rule is present')
+    assert.ok(fullText.includes('反引号'), 'and it names the mechanism: backticks')
+  })
 }
 
 {
@@ -252,6 +261,9 @@ console.log('\nprompt rules\n')
     assert.equal(minimal.sections.length, 1)
     assert.ok(minimal.sections[0].text.length < 400, `minimal section is ${minimal.sections[0].text.length} chars`)
     assert.ok(!minimal.sections[0].text.includes('结论数值'), 'minimal must not carry the readability rules')
+  })
+  check('minimal leaves the quoting rule out', () => {
+    assert.ok(!minimal.sections[0].text.includes('故意写错的例子'), 'the quoting rule belongs to the full set only')
   })
 }
 
