@@ -67,9 +67,26 @@ profile 目录可用 `DSH_PROFILE_DIR` 覆盖。
 > `username=<你的账号>` 和一段 `password=`；`git ls-remote origin refs/heads/main` 能直接打出
 > commit id，就说明推拉都通了。
 >
+> **这台机器的网络会间歇性掐掉 git 的传输**（不是认证问题）：同一分钟内，`http://…/info/refs`
+> 的探测能在 1s 内返回 200，也可能 20s 后 `Recv failure: Connection was reset` 或
+> `GnuTLS recv error (-110)`。所以脚本/CI 里推要带重试。实测有效的兜底顺序：
+> ① 先直接 `git push`；② 失败就试
+> `git -c http.curloptResolve=github.com:443:140.82.113.3 -c http.version=HTTP/1.1 push`
+> （`140.82.113.3` 是本轮唯一稳定给 200 的 IP，`140.82.112.3` 和 `20.205.243.165` 都超时，
+> `20.205.243.168` 回 400）；③ 还不行就从 WSL 里推——WSL 的 git 与本机 Windows git 走的是
+> 两条不同的网络栈，Windows 侧被 reset 时 WSL 侧往往一次就过，只是 WSL 里没有 credential
+> helper，要在命令行上临时把 token 递进去（不要写进任何 git config）：
+>
+> ```bash
+> TOKEN=$(sed -n 's/^[[:space:]]*oauth_token:[[:space:]]*//p' \
+>   "/mnt/c/Users/$USER/AppData/Roaming/GitHub CLI/hosts.yml" | head -1 | tr -d '\r')
+> GH_TOKEN="$TOKEN" git -c credential.helper='!f() { printf "username=x-access-token\npassword=%s\n" "$GH_TOKEN"; }; f' \
+>   push origin HEAD:main
+> ```
+>
 > 下面这段是历史记录（当时 `.tools\git.ps1` 包装脚本 + `curloptResolve` IP 兜底的方案），
-> 现在**不需要了**：本轮实测 DNS 仍把 `github.com` 解析到 `20.205.243.166`，但 `git fetch`
-> 3.6s 直接成功。留着是因为它解释了"同一台机器上某个 github.com IP 会稳定超时"这个现象。
+> 现在**不需要了**：`.tools\` 已经不在磁盘上，凭据也不再经它传递。留着是因为它解释了
+> "同一台机器上某个 github.com IP 会稳定超时"这个现象。
 
 <!-- 历史：当时需要 bypass DNS 的坏 IP，脚本内容如下 -->
 <!--
