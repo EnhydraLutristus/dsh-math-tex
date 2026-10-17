@@ -23,7 +23,7 @@
 node tools/install.mjs                            # 复制 payload + 登记 bundle（幂等）
 node tools/install.mjs --dry-run                  # 只说会改什么
 node tools/install.mjs --uninstall dsh-math-tex   # 反安装（可指定别的包名）
-npm test                                          # 10 个测试文件，644 条断言
+npm test                                          # 10 个测试文件，646 条断言
 ```
 
 `tools/install.mjs` 里所有路径都由 `import.meta.url` 推出来，checkout 放在哪都能跑；
@@ -31,50 +31,65 @@ profile 目录可用 `DSH_PROFILE_DIR` 覆盖。
 
 源码已推到公开仓库 **https://github.com/EnhydraLutristus/dsh-math-tex**（`main`，MIT）。
 
-> **推送工具链现状（2026-10-17 记）**：`<workspace>\.tools\` 整个目录已经不在磁盘上了
-> （`gh.exe`、`gh-token.txt`、`git.ps1` 都没了），而仓库级 `credential.helper` 还指着
-> `.tools\bin\gh.exe`，所以那次 `git push` 报的是
-> `git: 'credential-…/.tools/bin/gh.exe' is not a git command` +
-> `fatal: could not read Username for 'https://github.com'`——**看起来像没登录，其实是
-> helper 文件被删了**。已把那条失效的 `credential.helper` 从 `.git/config` 里删掉。
+> **推送工具链现状（2026-10-17：已修好，裸 `git push` 就行）**：现在用官方 GitHub CLI 当
+> git 的 credential helper，**不需要** `<workspace>\.tools\` 里的任何东西——那个目录已不在
+> 磁盘上（`git.ps1`、`gh-token.txt`、`bin\gh.exe` 都没了），仓库级那条指向
+> `.tools\bin\gh.exe` 的 `credential.helper` 也已从 `.git/config` 删掉。留着下面这段是因为
+> 它记下了这次装配踩到的两个坑。
 >
-> 本次是用 Windows 凭据管理器里那条 `git:https://github.com`（用户 `EnhydraLutristus`）
-> 临时导出到一次性的 `credential-store` 文件推的（推完即删）。下次要推，两条路：
-> ① `winget install GitHub.cli` 后 `gh auth login`，再把 helper 指回去；
-> ② 用 `git-credential-manager.exe`（在 `C:\Program Files\Git\mingw64\bin\`，
-> 注意 git 的 `credential.helper` 值**不能含空格**，直接写这个路径会失败）。
-> 本次实测 DNS 仍把 `github.com` 解析到 `20.205.243.166`（就是下面记的那个超时 IP），
-> 但 `git push` 一次就通了，没走 `.tools\git.ps1` 的 `curloptResolve` 绕行。
+> 装配过程（在这台机器上重做一遍就这些命令）：
+>
+> ```powershell
+> # 1) 装 gh。winget 在这台机器上拉不下来（0x80072efd），直接下 MSI 再"解包安装"：
+> #    没有管理员权限时 msiexec /i 会以 1603 失败，改用 /a 只解包、不写 HKLM。
+> msiexec /a gh.msi /qb TARGETDIR=C:\Users\<你>\gh-cli
+> # 2) 登录（设备码流程：给一个 8 位一次性代码，在浏览器打开 github.com/login/device 输进去）
+> & "C:\Users\<你>\gh-cli\Program Files\GitHub CLI\gh.exe" auth login --hostname github.com `
+>     --git-protocol https --web --insecure-storage
+> # 3) 把 gh 二进制复制到**不含空格**的路径，再让它去写 git 配置：
+> Copy-Item "C:\Users\<你>\gh-cli\Program Files\GitHub CLI\gh.exe" "C:\Users\<你>\gh-cli\gh.exe"
+> & "C:\Users\<你>\gh-cli\gh.exe" auth setup-git --hostname github.com
+> ```
+>
+> 两个坑，都实测踩过：
+> ① `--with-token` 要求 token 至少含 `repo`、`read:org`、`gist` 三个 scope，而本机凭据管理器
+> 里那条只有 `gist, repo, workflow`，于是报
+> `error validating token: missing required scope 'read:org'`；走设备码流程登录才带上
+> `read:org`。另外 `--scopes` 不能和 `--with-token` 一起用。
+> ② **git 的 `credential.helper` 值不能含空格**。gh 默认装在 `Program Files` 下，直接写这个
+> 路径会让 git 把值截断，报
+> `git: 'credential-C:UsersSuansDeTusgh-cliProgram' is not a git command`
+> ——gh 自己 `auth setup-git` 写进去的 `!'…\gh.exe' auth git-credential` 形式也一样，因为
+> `!` 后面的路径里有空格。把 `gh.exe` 复制到 `C:\Users\<你>\gh-cli\gh.exe` 这种无空格路径即可。
+>
+> 验证方法（不打印凭据本体）：
+> `printf 'protocol=https\nhost=github.com\n\n' | git credential fill` 应返回
+> `username=<你的账号>` 和一段 `password=`；`git ls-remote origin refs/heads/main` 能直接打出
+> commit id，就说明推拉都通了。
+>
+> 下面这段是历史记录（当时 `.tools\git.ps1` 包装脚本 + `curloptResolve` IP 兜底的方案），
+> 现在**不需要了**：本轮实测 DNS 仍把 `github.com` 解析到 `20.205.243.166`，但 `git fetch`
+> 3.6s 直接成功。留着是因为它解释了"同一台机器上某个 github.com IP 会稳定超时"这个现象。
 
-**在这台机器上跑 git 要用包装脚本** `<workspace>\.tools\git.ps1`（把参数原样传给 git；**当前缺失，见上面的说明**）：
+<!-- 历史：当时需要 bypass DNS 的坏 IP，脚本内容如下 -->
+<!--
+**在这台机器上跑 git 要用包装脚本** `<workspace>\.tools\git.ps1`（把参数原样传给 git；当前已不存在）：
 
 ```powershell
-# 在仓库目录里直接调用即可；参数原样传给 git，仓库位置由当前目录向上找 .git
 cd <本仓库>
 & $env:DSH_WORKSPACE\.tools\git.ps1 push
-& $env:DSH_WORKSPACE\.tools\git.ps1 -C <本仓库> status
 ```
-
-(`$env:DSH_WORKSPACE` 是 checkout 的上一层目录，即 `.tools\` 所在的位置；
-换成绝对路径同样可以。)
-
-（早期版本把仓库路径写死成 workspace 根，于是 `-C <子仓库> push` 会报失败但推送其实
-成功了；现在脚本从当前目录向上找 `.git`，也接受显式 `-C`，找不到仓库会明确以 128 退出。
-注意参数要**裸传**：写 `& git.ps1 -Args push` 会被当成 `git -Args push`，git 报
-`unknown option: -Args`——看起来像推送失败，其实一条命令都没发出去。）
 
 原因不是墙也不是代理（系统里没有任何代理），而是 **DNS 给 `github.com` 解析出的
 `20.205.243.166` 在 443 上稳定超时**：连续三次 21s 超时；而同一 /24 的
 `.160`–`.165`、`.167`–`.169`、`140.82.11x.3`、`api.github.com`、`codeload.github.com`、
 `ssh.github.com` 全部 0.3s 通。GitHub 所有地址共用同一张证书，所以用
 `git -c http.curloptResolve=github.com:443:140.82.112.3` 把主机名指到可用 IP，
-TLS 校验照样通过（`curl --resolve` 返回 404 而非 TLS 错误，证明这条路是通的）。
-`.tools\git.ps1` 就是这件事加三次重试。
+TLS 校验照样通过。`.tools\git.ps1` 就是这件事加三次重试。
 
-凭据放在 `.tools\gh-token.txt`（`gho_` 前缀，scope 仅 `repo`，`.tools/` 已在
-`.gitignore` 里），用仓库级 credential helper 交给 git，不写进 remote URL、
-不落到 `.git/config` 的明文里。`.tools\gh-device-login.py` 是设备码授权脚本
-（自己实现、对每个请求重试，因为 gh 自己不重试）。
+凭据当时放在 `.tools\gh-token.txt`（`gho_` 前缀，scope 仅 `repo`，`.tools/` 在
+`.gitignore` 里），`git.ps1` 把它导出成 `GH_TOKEN` 再交给 git。
+-->
 
 `tools/install.mjs` 只认 `package.json` 的 `files` 列表（`package.json` 本身无条件复制——
 少了它 Node 根本解析不了这个目录，而且会在宿主里报 ENOENT 而不是报打包错误）。
@@ -150,7 +165,7 @@ TLS 校验照样通过（`curl --resolve` 返回 404 而非 TLS 错误，证明�
 | 文件 | 断言 | 挡什么 |
 | --- | --- | --- |
 | `test/guard-test.mjs` | 83 | 判定与区域切分必须和渲染器一致；一处缺陷只许报告一次；修复不许破坏周围的 Markdown 结构；释放点不许落进未闭合的行内代码（否则整段回答被吞）；裸 HTML 的日志在标签被切分到多次释放时也要报出 |
-| `test/red-render-test.mjs` | 71 | 三类红（异常 / 无异常但带红 / 围栏内）都要被发现；回显从 HTML 与 message 两份账本里取，红渲染没有 message 时取画出来的 span |
+| `test/red-render-test.mjs` | 68 | 三类红（异常 / 无异常但带红 / 围栏内）都要被发现；回显从 HTML 与 message 两份账本里取，红渲染没有 message 时取画出来的 span |
 | `test/e2e-test.mjs` | 39 | 对**原始 KaTeX**逐个区域核对判定：修好的真不红，没修的仍然红 |
 | `test/regression-test.mjs` | 23 | 已经发生过的缺陷不许复发（用例逐字引自真实会话记录） |
 | `test/wire-test.mjs` | 103 | 真实 DSH 会话里的线上形状；流式输出等于"整段一次修复" |
@@ -161,7 +176,7 @@ TLS 校验照样通过（`curl --resolve` 返回 404 而非 TLS 错误，证明�
 | `tools/live-path-test.mjs` | 28 | **验收**：装好的副本 + profile 的真实配置 + 宿主的挂载路径，坏答案真的变成干净文本 |
 | `test/katex.mjs` | — | oracle 自检：bundle 存在、hash 对、版本对 |
 
-合计 **10 个文件、644 条断言**，`npm test` 约 4 秒，全程不需要网络。
+合计 **10 个文件、646 条断言**，`npm test` 约 4 秒，全程不需要网络。
 
 ## 5. 真实会话里的两次事故（都已被回归测试钉住）
 
