@@ -217,6 +217,13 @@ console.log('\nprompt rules\n')
     assert.ok(fullText.includes('故意写错的例子'), 'the quoting rule is present')
     assert.ok(fullText.includes('反引号'), 'and it names the mechanism: backticks')
   })
+  // 1.2.10: one delimiter syntax. Measured on session-b779ed4c (2026-10-18): two answers, 11 883
+  // characters, 205 `\(`/`\[` regions and zero `$`, so the guard had nothing it could read. The
+  // guard now understands both, but a single syntax is still fewer pairs to get wrong.
+  check('the full rules name the one delimiter syntax', () => {
+    assert.ok(fullText.includes('公式分隔符统一用'), 'the delimiter rule is present')
+    assert.ok(fullText.includes('\\(') && fullText.includes('\\]'), 'and it names the syntax it rules out')
+  })
 }
 
 {
@@ -264,6 +271,9 @@ console.log('\nprompt rules\n')
   })
   check('minimal leaves the quoting rule out', () => {
     assert.ok(!minimal.sections[0].text.includes('故意写错的例子'), 'the quoting rule belongs to the full set only')
+  })
+  check('minimal leaves the delimiter rule out', () => {
+    assert.ok(!minimal.sections[0].text.includes('公式分隔符统一用'), 'a style rule belongs to the full set only')
   })
 }
 

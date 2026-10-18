@@ -32,6 +32,11 @@ Defence 2 is the point. `llm/stream` wraps every streaming model call, and a rew
 reaches the durable message body, the live client frames and later compaction alike — so the
 screen and the record are repaired together.
 
+It reads **two delimiter syntaxes**: `$…$` / `$$…$$` and LaTeX's own `\(…\)` / `\[…\]`. The
+second is not optional. In one session on 2026-10-18 the model wrote 11 883 characters of
+answers containing 205 backslash formulas and **zero** `$`, and the surface rendered them as
+formulas anyway — a guard that knows one syntax protects half the answers.
+
 ## Detection asks the renderer, not a regex
 
 The intuitive heuristics are wrong in **both** directions: a 300-character formula, an
@@ -129,18 +134,18 @@ npm test
 
 | File | What it measures | Assertions |
 | --- | --- | --- |
-| `guard-test` | does the judge agree with the renderer; does a repair leave the surrounding Markdown intact; can a release land inside an unclosed code span; is raw HTML reported (never rewritten), even when the tag is split across releases? | 83 |
+| `guard-test` | does the judge agree with the renderer; are both delimiter syntaxes (`$…$` and `\(…\)`) understood; does a repair leave the surrounding Markdown intact; can a release land inside an unclosed code span, or be fooled by a fence that started earlier; is raw HTML reported (never rewritten), even when the tag is split across releases? | 98 |
 | `red-render-test` | are all three red classes caught; is the echo read from the right account? | 68 |
 | `e2e-test` | does the real incident come out readable end to end? | 39 |
-| `wire-test` | does the streamed output equal the whole-text repair? | 103 |
+| `wire-test` | does the streamed output equal the whole-text repair? | 107 |
 | `fuzz-test` | does that hold under 236 arbitrary chunkings? | 236 |
-| `config-test` | does every documented option actually do something? | 32 |
+| `config-test` | does every documented option actually do something? | 36 |
 | `smoke-test` | does the package load the way the host loads it? | 23 |
-| `installed-test` | can the **installed copy** in the profile (not the source tree) load and repair? | 11 |
+| `installed-test` | can the **installed copy** in the profile (not the source tree) load and repair; is it byte-identical to the source? | 12 |
 | `regression-test` | do fixed defects stay fixed? (cases quoted verbatim from real sessions) | 23 |
 | `live-path-test` | **acceptance**: installed copy + the profile's real config + the host's mount path — does a broken answer actually become clean text? | 28 |
 
-652 assertions across 10 files, about 4 seconds, no network.
+670 assertions across 10 files, about 4 seconds, no network.
 
 `fuzz-test` is the strongest instrument: it requires **any** chunking of the real incident —
 one character per frame up to 1600, plus random splittings — to reassemble byte-identically

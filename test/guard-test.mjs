@@ -601,6 +601,90 @@ console.log('\n=== G. raw HTML is reported, not edited ===\n')
 }
 
 // ---------------------------------------------------------------------------
+console.log('\n=== H. backslash delimiters \\(…\\) and \\[…\\] ===\n')
+
+/** Feed `text` through the real state at `size`-character deltas; keep the output too. */
+function streamVia(text, size = 7, opts = {}) {
+  const lines = []
+  const state = createBlockState({ log: (line) => lines.push(line), repairMode: 'auto', ...opts })
+  let out = ''
+  for (let i = 0; i < text.length; i += size) out += state.push(text.slice(i, i + size))
+  out += state.finish()
+  return { out, lines }
+}
+
+{
+  // Why this section exists: `session-b779ed4c` (2026-10-18) carried two answers with 205
+  // `\(`/`\[` regions and not a single `$`, so before 1.2.10 the guard examined none of them
+  // while the reader's renderer was painting them. Support has to include the untouchable case,
+  // otherwise "sees the syntax" would only mean "finds something to complain about".
+  const clean = '证明：\\(h=g\\circ f\\) 在 \\(p\\) 处光滑。'
+  const a = streamVia(clean)
+  check('a valid \\(…\\) answer is delivered untouched', a.out === clean, JSON.stringify(a.out))
+  check('its two regions are found', findMathRegions(clean).length === 2, String(findMathRegions(clean).length))
+
+  const broken = '这里 \\(x_1_2\\) 会红。'
+  const b = streamVia(broken)
+  check('a double subscript inside \\(…\\) is repaired', b.out.includes('\\(x_{1_2}\\)'), JSON.stringify(b.out))
+  check('and the repair keeps the backslash delimiters', !b.out.includes('$'), JSON.stringify(b.out))
+
+  const display = '\\[\nx_1_2\n\\]'
+  const c = streamVia(display)
+  check('a display formula in \\[…\\] is repaired', c.out.includes('x_{1_2}'), JSON.stringify(c.out))
+  check('the repaired display formula is valid on its own', inspectText(c.out).flagged.length === 0, JSON.stringify(inspectText(c.out)))
+}
+
+{
+  // The shapes that must stay literal, each for a different reason.
+  const midLine = '段中 \\[x\\] 是字面量。'
+  check('\\[ mid-paragraph is literal', findMathRegions(midLine).length === 0)
+
+  const backticked = '`\\(x_1_2\\)` 在反引号里。'
+  check('\\(…\\) inside a code span is not a region', findMathRegions(backticked).length === 0)
+
+  const paraBreak = '价格 \\(' + 'a' + '\n\n下一段的 \\)' + ' 收尾。'
+  check('a \\) after a blank line does not close a \\(', findMathRegions(paraBreak).length === 0)
+
+  const prose = '不是公式：\\(' + 'x'.repeat(450) + ' 后面还有很长的正文。'
+  const d = streamVia(prose, 97)
+  check('an unclosed \\( far from the end is literal text', d.out === prose, JSON.stringify(d.out.slice(0, 20)))
+  check('and it is not held back', !d.lines.some((l) => /holding/.test(l)), JSON.stringify(d.lines))
+}
+
+{
+  // Streaming equivalence, the invariant the whole guard rests on: what arrives in deltas must
+  // be what one pass over the finished text would have produced.
+  const mixed = '先看 \\(a+b\\) 与 \\(x_1_2\\) 的区别。\n\n\\[\ny_1_2 = \\frac{1}{2}\n\\]\n\n最后 \\(c\\) 收尾。'
+  const once = repairText(mixed).text
+  const streamed = streamVia(mixed, 7)
+  check('deltas deliver what one pass over the whole text delivers', streamed.out === once, JSON.stringify(streamed.out.slice(0, 40)))
+  check('no hold is needed for backslash regions', !streamed.lines.some((l) => /holding/.test(l)), JSON.stringify(streamed.lines))
+  check('the repaired answer has no leftover flag', inspectText(streamed.out).flagged.length === 0, JSON.stringify(inspectText(streamed.out)))
+}
+
+// ---------------------------------------------------------------------------
+console.log('\n=== I. release boundaries vs. surrounding structure ===\n')
+
+{
+  // A release may land anywhere, and the text before it can be structure that the fragment
+  // does not repeat. Measured on a recorded answer (`session-c00d0857`, 1168 characters): the
+  // pending fragment began with the closing ``` of a `latex` block, the scanner read those
+  // backticks as an opening fence, found no formula behind them, and allowed a release that
+  // ended one character into `$x_{1_{2_{3}}}$`. The repair then deleted that `$`, because in
+  // the accumulated text the formula really is unterminated at that point.
+  const fenced = '```latex\n$x_{1_{2_{3}}}$\n```\n\n→ $x_{1_{2_{3}}}$\n\n后面还有正文。'
+  const broken = []
+  for (let size = 1; size <= 12; size += 1) {
+    for (const tailBuffer of [0, 3, 7, 15]) {
+      const r = streamVia(fenced, size, { tailBuffer })
+      if (r.out !== fenced) broken.push(`${size}/${tailBuffer}:${JSON.stringify(r.out.slice(-20))}`)
+      if (r.lines.some((l) => /holding|could not be released/.test(l))) broken.push(`${size}/${tailBuffer}:held`)
+    }
+  }
+  check('a formula after a closing fence is never released inside', broken.length === 0, JSON.stringify(broken))
+}
+
+// ---------------------------------------------------------------------------
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`)
 if (failures.length) {
   console.log('\nfailures:')
