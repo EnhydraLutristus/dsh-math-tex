@@ -175,6 +175,58 @@ function renderAll(text) {
   return { red, total: regions.length }
 }
 
+console.log('\n=== 7. a display block whose fences share a line with the content ===')
+{
+  // The reader's tokenizer only closes a `$$` block at a `$$` that sits alone on its line. A
+  // block written `$$a=b\nc=d$$` therefore never closes: it swallows the rest of the answer and
+  // renders all of it as one red blob. `session-5cc2fbd3` (2026-10-18) is the incident: the
+  // answer produced ONE 3,981-character math node that began at `\\begin{cases}` — the opening
+  // line's formula had been discarded as fence metadata — and the reader saw a screen of red.
+  //
+  // The assertion below is structural on purpose: it re-checks the host's closing rule on the
+  // emitted text instead of asking the plugin whether it is happy with itself.
+  function fenceRuleViolations(text) {
+    const bad = []
+    for (const region of findMathRegions(text)) {
+      if (region.kind !== 'display' || !region.body.includes('\n')) continue
+      const afterOpener = text.slice(region.start + 2).split('\n')[0]
+      if (afterOpener.trim() !== '') bad.push('opening fence shares its line with content')
+      if (region.end - 3 >= 0 && text[region.end - 3] !== '\n') bad.push('closing fence does not start its line')
+      if (text.slice(region.end).split('\n')[0].trim() !== '') bad.push('closing fence shares its line with text')
+    }
+    return bad
+  }
+
+  const fenceShapes = [
+    { label: 'content on the opening fence', text: '$$a=b\nc=d$$\n\n后面还有正文。\n' },
+    { label: 'closing fence not at line start', text: '$$\na=b\nc=d$$\n\n后面还有正文。\n' },
+    { label: 'both ends glued, text after', text: '$$a=b\nc=d$$ tail\n\n后面还有正文。\n' },
+  ]
+  for (const { label, text } of fenceShapes) {
+    const region = findMathRegions(text).find((r) => r.kind === 'display')
+    check(`${label}: reported as the framing defect`, inspect(region).reason === 'display-fence-not-alone', `reason=${inspect(region).reason}`)
+    const fixed = repairText(text)
+    check(`${label}: repaired`, fixed.repairs.length >= 1 && fixed.repairs[0].reason === 'display-fence-not-alone', JSON.stringify(fixed.repairs.map((r) => r.reason)))
+    check(`${label}: emitted text satisfies the host's closing rule`, fenceRuleViolations(fixed.text).length === 0, JSON.stringify(fenceRuleViolations(fixed.text)))
+    check(`${label}: the body is preserved`, fixed.text.includes('a=b') && fixed.text.includes('c=d'), JSON.stringify(fixed.text.slice(0, 40)))
+    check(`${label}: nothing is left flagged`, findMathRegions(fixed.text).filter((r) => inspect(r).verdict !== 'ok').length === 0, 'still flagged')
+  }
+  for (const { label, text } of [
+    { label: 'canonical', text: '$$\na=b\nc=d\n$$\n\n后面还有正文。\n' },
+    { label: 'whole block on one line', text: '$$a=b$$\n\n后面还有正文。\n' },
+  ]) {
+    const untouched = repairText(text)
+    check(`${label}: left untouched`, untouched.text === text && untouched.repairs.length === 0, JSON.stringify(untouched.repairs.map((r) => r.reason)))
+  }
+  // The body must render before the framing is blamed: a block whose TeX is broken is a
+  // different defect, and re-framing it unchanged would emit a red formula.
+  const brokenBody = '$$\\frac{1}{2\n$$'
+  const brokenVerdict = inspect(findMathRegions(brokenBody)[0])
+  check('an unclosed brace is NOT blamed on the framing', brokenVerdict.reason !== 'display-fence-not-alone', `reason=${brokenVerdict.reason}`)
+  const brokenFixed = repairText(brokenBody)
+  check('an unclosed brace still ends up rendering', renderAll(brokenFixed.text).red === 0, JSON.stringify(brokenFixed.text))
+}
+
 console.log('\n=== 6. the real incident text through the guard ===')
 const incident = readFileSync(new URL('./fixtures/real-broken.txt', import.meta.url), 'utf8')
 const withNasty =

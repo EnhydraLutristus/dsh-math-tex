@@ -1,6 +1,6 @@
 # dsh-math-tex — 当前状态（可交接）
 
-包名 `dsh-math-tex` 1.2.10。**仓库根目录就是包根目录**（checkout 在
+包名 `dsh-math-tex` 1.2.11。**仓库根目录就是包根目录**（checkout 在
 `default-workspace\dsh-math-tex\`，workspace 里现在只剩这一个项目，其余全在
 `default-workspace\_archive\`）。装到
 `%USERPROFILE%\.dsh\profiles\desktop\node_modules\dsh-math-tex\`，
@@ -23,7 +23,7 @@
 node tools/install.mjs                            # 复制 payload + 登记 bundle（幂等）
 node tools/install.mjs --dry-run                  # 只说会改什么
 node tools/install.mjs --uninstall dsh-math-tex   # 反安装（可指定别的包名）
-npm test                                          # 10 个测试文件，670 条断言
+npm test                                          # 10 个测试文件，697 条断言
 ```
 
 `tools/install.mjs` 里所有路径都由 `import.meta.url` 推出来，checkout 放在哪都能跑；
@@ -189,8 +189,8 @@ TLS 校验照样通过。`.tools\git.ps1` 就是这件事加三次重试。
 
 | 文件 | 断言 | 挡什么 |
 | --- | --- | --- |
-| `test/guard-test.mjs` | 98 | 判定与区域切分必须和渲染器一致；两种定界符（`$…$` 与 `\(…\)`）都要认，且只有正文里的才算、围栏与行内代码里的不算；一处缺陷只许报告一次；修复不许破坏周围的 Markdown 结构；释放点不许落进未闭合的行内代码、也不许被更早开始的围栏骗过去；裸 HTML 的日志在标签被切分到多次释放时也要报出 |
-| `test/red-render-test.mjs` | 68 | 三类红（异常 / 无异常但带红 / 围栏内）都要被发现；回显从 HTML 与 message 两份账本里取，红渲染没有 message 时取画出来的 span |
+| `test/guard-test.mjs` | 106 | 判定与区域切分必须和渲染器一致；两种定界符（`$…$` 与 `\(…\)`）都要认，且只有正文里的才算、围栏与行内代码里的不算；一处缺陷只许报告一次；修复不许破坏周围的 Markdown 结构；释放点不许落进未闭合的行内代码、也不许被更早开始的围栏骗过去；裸 HTML 的日志在标签被切分到多次释放时也要报出 |
+| `test/red-render-test.mjs` | 87 | 三类红（异常 / 无异常但带红 / 围栏内）都要被发现；回显从 HTML 与 message 两份账本里取，红渲染没有 message 时取画出来的 span |
 | `test/e2e-test.mjs` | 39 | 对**原始 KaTeX**逐个区域核对判定：修好的真不红，没修的仍然红 |
 | `test/regression-test.mjs` | 23 | 已经发生过的缺陷不许复发（用例逐字引自真实会话记录） |
 | `test/wire-test.mjs` | 107 | 真实 DSH 会话里的线上形状；流式输出等于"整段一次修复"；超过 `maxHold` 的块整段到达、冻结后不再修复 |
@@ -201,7 +201,7 @@ TLS 校验照样通过。`.tools\git.ps1` 就是这件事加三次重试。
 | `tools/live-path-test.mjs` | 28 | **验收**：装好的副本 + profile 的真实配置 + 宿主的挂载路径，坏答案真的变成干净文本 |
 | `test/katex.mjs` | — | oracle 自检：bundle 存在、hash 对、版本对 |
 
-合计 **10 个文件、670 条断言**，`npm test` 约 4 秒，全程不需要网络。
+合计 **10 个文件、697 条断言**，`npm test` 约 4 秒，全程不需要网络。
 
 ## 5. 真实会话里的两次事故（都已被回归测试钉住）
 
@@ -424,6 +424,63 @@ verbatim`。**丢字不再是选项，退让的只是"不再修"。**
 凡是"只看待发片段"的判断，遇到跨片段的状态（围栏、代码跨度、未闭合区域）都会读错；
 判断必须基于累积全文，或者显式携带状态。另一个教训：单元测试造的形状覆盖不了真实文本里
 "释放点刚好落在结构边界上"的组合，语料重放（`tools/replay-stream.mjs`）是这类缺陷的唯一入口。
+
+## 7g. 插件说"合法"，屏幕上一整片红：`$$` 的闭合规则（2026-10-18，1.2.11 修复）
+
+**现象**：用户报 `session-5cc2fbd3` 一场对话「出现了大范围的红色报错」。日志里那一场只有
+`prompt rules now apply to session session-5cc2fbd3…`、`llm/stream hooked`、
+`guarded stream: 3106 text delta(s) in, 1050 out`——**零条 `repaired`、零条 `holding`**，
+插件认为自己什么都没做错。用插件自己的判定重放整篇回答：191 个区域、`judge` 一个都没报错、
+`repairText` 零修复。两边都说没问题，屏幕上却是红的。
+
+**真因**：渲染器不按"最近的 `$$`"配对，它只在遇到**独占一行**的 `$$` 时才闭合显示块。
+模型写的是
+
+```
+$$f(x) = \sum_{i=0}^{n} f_i x^i
+f'(x) = \sum_{i=1}^{n} i f_i x^{i-1}$$
+```
+
+开栏行在 `$$` 之后还有公式，它被当作围栏元数据**丢弃**；块一直开到下一个独占行的 `$$`。
+那篇回答里因此出现一个 **3981 字**的 `math` 节点，值从 `\begin{cases}` 开始，KaTeX 报
+`Can't use function '$' in math mode`，整块涂红。宿主节点统计：88 个数学节点里 display 只有
+1 个（本该是 17 个），其余全被吞进那一个。
+
+**为什么单元测试没发现**：`findMathRegions` 把任意一对 `$$…$$` 当 display 区域，`judge(body, true)`
+对这种正文当然通过——插件的"配对"和渲染器的"闭合"是两个不同的规则，而断言只检查了前者。
+
+**形状表**（用真实管线 `micromark` + `micromark-extension-math` + `mdast-util-math` 复现，
+脚本是一次性的 `.tmp-mm/host.mjs`，即宿主 `sameLineDollarMathFlow` 的移植）：
+
+| 输入 | 宿主结果 |
+| --- | --- |
+| `$$a=b$$`（整块一行、行首） | `math`，正常 |
+| `$$\na=b\nc=d\n$$` | `math`，正常 |
+| `$$a=b\nc=d$$` | 开栏吞掉公式、闭合失败 → 红 |
+| `$$\na=b\nc=d$$` | 同上 → 红 |
+| `$$a=b\nc=d$$ tail` | 红，且 `tail` 一起被吞 |
+| `文字 $$a=b$$ 文字` | `inlineMath`，正常 |
+| `  $$a=b$$`（缩进两格） | `math`，正常 |
+| `$$$a=b$$` | 没有数学节点 |
+
+**修法**：`findMathRegions` 给 display 区域加 `multiline` / `hostFencesAlone` / `breakAfterCloser`；
+`inspect` 新增 `display-fence-not-alone`（**只在正文本身渲染通过时**才归因到围栏——正文坏掉的
+仍走 `oracle-rejected`，否则会把一个坏的公式重排成红块）；`releaseRegion` 做最小编辑——把两个
+`$$` 各自挪到独立行，不搬块、不加空行，所以列表/表格里的位置不变。
+
+**验收**：`test/guard-test.mjs` 98 → 106（三种坏形状 × 7 种分块与一次性修复逐字节一致，交付文本
+重新检查宿主闭合规则）；`test/red-render-test.mjs` 68 → 87（判定、修复、围栏规则、正文保留、
+无残留；规范形与单行形不动；坏的正文不许被归因到围栏）；`tools/replay-stream.mjs` 增结构性围栏
+断言——110 条真实回答、0 失败、24 条被修复（10 条是本次缺陷、8 条走 `maxHold` 冻结路径）。
+
+全机 588 条已记录回答走真实宿主管线：修复前 **17 条**有红区，修复后 **0 条**；修复原因
+`display-fence-not-alone=17`、`mid-paragraph-display=13`、`oracle-rejected=13`、`unterminated=3`；
+宿主数学节点 2885 → 3518。
+
+**教训**：插件对"哪里是公式"的理解，必须与渲染器的 **tokenizer** 一致，而不是与"TeX 是否合法"
+一致。前者决定读者看到什么，后者只决定渲染是否成功；两者不一致时，插件越自信越糟——它会把
+一整屏红判成"零问题"，而且日志里连一条可疑记录都没有。这类缺陷只能靠**复现渲染器**（移植它的
+tokenizer 或直接调用它）来发现，靠"再看一遍 TeX 语法"永远看不见。
 
 ## 7b. 仍然没证明的
 

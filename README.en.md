@@ -134,8 +134,8 @@ npm test
 
 | File | What it measures | Assertions |
 | --- | --- | --- |
-| `guard-test` | does the judge agree with the renderer; are both delimiter syntaxes (`$…$` and `\(…\)`) understood; does a repair leave the surrounding Markdown intact; can a release land inside an unclosed code span, or be fooled by a fence that started earlier; is raw HTML reported (never rewritten), even when the tag is split across releases? | 98 |
-| `red-render-test` | are all three red classes caught; is the echo read from the right account? | 68 |
+| `guard-test` | does the judge agree with the renderer; are both delimiter syntaxes (`$…$` and `\(…\)`) understood; does a repair leave the surrounding Markdown intact; can a release land inside an unclosed code span, or be fooled by a fence that started earlier; is raw HTML reported (never rewritten), even when the tag is split across releases? | 106 |
+| `red-render-test` | are all three red classes caught; do `$$` fences sit on lines of their own (the only shape the host closes); is the echo read from the right account? | 87 |
 | `e2e-test` | does the real incident come out readable end to end? | 39 |
 | `wire-test` | does the streamed output equal the whole-text repair? | 107 |
 | `fuzz-test` | does that hold under 236 arbitrary chunkings? | 236 |
@@ -145,7 +145,7 @@ npm test
 | `regression-test` | do fixed defects stay fixed? (cases quoted verbatim from real sessions) | 23 |
 | `live-path-test` | **acceptance**: installed copy + the profile's real config + the host's mount path — does a broken answer actually become clean text? | 28 |
 
-670 assertions across 10 files, about 4 seconds, no network.
+697 assertions across 10 files, about 4 seconds, no network.
 
 `fuzz-test` is the strongest instrument: it requires **any** chunking of the real incident —
 one character per frame up to 1600, plus random splittings — to reassemble byte-identically

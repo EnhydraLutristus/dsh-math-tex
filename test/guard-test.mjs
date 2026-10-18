@@ -685,6 +685,36 @@ console.log('\n=== I. release boundaries vs. surrounding structure ===\n')
 }
 
 // ---------------------------------------------------------------------------
+{
+  // Why this section exists: `session-5cc2fbd3` (2026-10-18) rendered as one screen-wide red
+  // block. The reader's tokenizer closes a `$$` block only when the closing fence sits alone on
+  // its line, so `$$f(x)=...\nf'(x)=...$$` never closes: the block swallowed thousands of
+  // characters and every one of them became TeX. The guard's own pairing was happy — this is
+  // the case where being right about TeX is not enough, and the fix is a framing repair that
+  // has to survive streaming.
+  const shapes = [
+    { label: 'content on the opening fence', text: '$$a=b\nc=d$$ tail\n\n后面还有正文。' },
+    { label: 'closing fence not at line start', text: '$$\na=b\nc=d$$ tail\n\n后面还有正文。' },
+    { label: 'both ends glued', text: '$$a=b\nc=d$$' },
+  ]
+  for (const { label, text } of shapes) {
+    const expected = repairText(text).text
+    const broken = []
+    for (const size of [1, 2, 3, 5, 7, 11, 64]) {
+      const r = streamVia(text, size)
+      if (r.out !== expected) broken.push(`${size}:${JSON.stringify(r.out.slice(0, 24))}`)
+      if (r.lines.some((l) => /holding|could not be released/.test(l))) broken.push(`${size}:held`)
+    }
+    check(`${label}: streamed form equals the one-shot repair at every chunk size`, broken.length === 0, JSON.stringify(broken))
+    check(`${label}: the delivered block has both fences alone on their lines`, /(^|\n)\$\$\n/.test(expected) && /\n\$\$(\n|$)/.test(expected), JSON.stringify(expected.slice(0, 40)))
+  }
+  const canonical = '$$\na=b\nc=d\n$$\n\n后面还有正文。'
+  check('a canonical display block is left byte-identical', streamVia(canonical, 7).out === canonical)
+  const singleLine = '$$a=b$$\n\n后面还有正文。'
+  check('a single-line display block is left byte-identical', streamVia(singleLine, 7).out === singleLine)
+}
+
+// ---------------------------------------------------------------------------
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`)
 if (failures.length) {
   console.log('\nfailures:')
