@@ -74,6 +74,20 @@ When a region would render red, in order:
 recoverable and copyable — instead of red text. Guessing at structural damage would invent
 mathematics the author never wrote, and that is not done.
 
+## Download
+
+All three routes give the same package. There is **no build step** — unpack and use:
+
+| Route | Address / command |
+| --- | --- |
+| Releases (recommended, pinned version) | <https://github.com/EnhydraLutristus/dsh-math-tex/releases/latest> |
+| git clone | `git clone https://github.com/EnhydraLutristus/dsh-math-tex.git` |
+| main branch snapshot | `curl -L -o dsh-math-tex.zip https://github.com/EnhydraLutristus/dsh-math-tex/archive/refs/heads/main.zip` |
+
+Requirements: Node.js `^22.19 || >=24` (check with `node --version`) and the DeepSeek Harness
+desktop app. After unpacking or cloning, enter the directory that holds `package.json`; the
+install commands below are run from there.
+
 ## Install
 
 ```bash

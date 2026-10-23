@@ -49,6 +49,19 @@ DSH 的对话渲染用 KaTeX 渲染 Markdown 数学，只要遇到它解析不�
 
 **数学永远不会被删掉。** 最坏情况是读者看到公式源码（可复制、可恢复），而不是红字。猜结构性损坏等于替作者编造数学，这件事不做。
 
+## 下载
+
+三种方式拿到的是同一份包，**没有构建步骤**，解压即可用：
+
+| 方式 | 地址 / 命令 |
+| --- | --- |
+| Releases（推荐，版本固定） | <https://github.com/EnhydraLutristus/dsh-math-tex/releases/latest> |
+| git clone | `git clone https://github.com/EnhydraLutristus/dsh-math-tex.git` |
+| main 分支快照 | `curl -L -o dsh-math-tex.zip https://github.com/EnhydraLutristus/dsh-math-tex/archive/refs/heads/main.zip` |
+
+环境要求：Node.js `^22.19 || >=24`（`node --version` 确认）、已安装 DeepSeek Harness 桌面版。
+解压或 clone 之后进入**含 `package.json` 的那一层目录**，下面的安装命令都在那里执行。
+
 ## 安装
 
 ```bash
