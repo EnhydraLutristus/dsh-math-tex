@@ -335,6 +335,22 @@ console.log('\n=== H. the closing block-end carries the repaired text ===')
   check('the repair actually happened', block.includes('$x_{1_2}$') && !block.includes('$x_1_2$'), JSON.stringify(block.slice(0, 40)))
   check('block-end equals the deltas the reader already saw', block === streamed, `len block=${block.length} streamed=${streamed.length}`)
 
+  // The closing log line is the fingerprint an operator reads to tell which build a live
+  // session is running, so the block-end realignment has to show up in it.
+  {
+    const logLines = []
+    async function* logged() {
+      yield { type: 'block-start', index: 0, blockType: 'text' }
+      for (const text of deltas) yield { type: 'text-delta', index: 0, text }
+      yield { type: 'block-end', index: 0, block: { type: 'text', text: CASE } }
+    }
+    for await (const _ignored of guardStream(logged(), { onLog: (line) => logLines.push(line) })) {
+      // drain
+    }
+    const summary = logLines.at(-1) ?? ''
+    check('the guard reports how many blocks it realigned', /1 block\(s\) realigned/.test(summary), JSON.stringify(summary))
+  }
+
   // The shape from the second live test: a display block opened on a line of prose.
   const GLUED = '即\n$$f\'(x_0)=\\lim_{\\Delta x\\to0}\\frac{f(x_0+\\Delta x)-f(x_0)}{\\Delta x}\n=\\tan\\alpha$$\n其中 $\\alpha$ 是倾斜角。'
   const gluedOut = await runChunks([
