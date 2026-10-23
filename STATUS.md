@@ -482,6 +482,41 @@ f'(x) = \sum_{i=1}^{n} i f_i x^{i-1}$$
 一整屏红判成"零问题"，而且日志里连一条可疑记录都没有。这类缺陷只能靠**复现渲染器**（移植它的
 tokenizer 或直接调用它）来发现，靠"再看一遍 TeX 语法"永远看不见。
 
+## 7h. 修好的文本没到屏幕上：`block-end` 带着原文覆盖了分片（2026-10-23，1.2.12 修复）
+
+**现象**：1.2.11 之后，用户按我给的用例重测，两张截屏上**依旧是原文**（`x_1_2` 红、
+`=\tan\alpha$$` 红）。而同一时刻：插件日志有 `repaired 1 region(s) so far: …`，
+`tools/replay-stream.mjs` 重放 `content === repairText(raw).text`，会话记录里
+`assistant/message.stream` 的 text-chunks 拼起来确实已经是 `$x_{1_2}$`。
+**三处证据都指向"修好了"，屏幕上却没有。**
+
+**定位**：逐条读 `session-badb5fcc` 的记录，同一篇回答里两个字段不一致——
+
+| 字段 | 长度 | 内容 |
+| --- | --- | --- |
+| `assistant/message.stream`（text-chunks 拼接） | 75 | `$x_{1_2}$` |
+| `assistant/message.message.content` | 73 | `$x_1_2$` |
+
+宿主的 `BlockAssembler`（asar 内 `BlockAssembler` 类）在 `block-end` 里做的是
+`partial.block = chunk.block`，而 `assemble()` 的第一行是 `if (partial.block) return partial.block`
+——**block-end 带回的整块优先于流式分片**。模型的原始终稿以 `block-end` 形式到达，
+插件只改 delta，于是"改到的"只有 `stream`；持久化与客户端渲染用的都是那份没改过的原文。
+这就是为什么日志、重放、甚至 stream 字段全都说没事，读者看到的却是红的。
+
+**修法**（`lib/guard.js`）：`block-end` 分支在该块有守卫状态时，把 `chunk.block.text`
+换成状态里修好的全文（`states.delete(index)` 后一次性 yield），新增 `createBlockState`
+的 `get text()` 暴露"已发到哪"；`lib/index.js` 相应导出。逻辑块（reasoning / tool-call）
+原样透传。
+
+**1.2.13 的补充**：给日志加 `K block(s) realigned` 指纹。没有它，"修复到不到落下"
+在日志里没有任何痕迹——`session-b52ae1fb` 就是这样被误判成"已经修好"的：那一场
+`guarded stream` 行里 block-end 覆盖照旧，只因为日志不记这件事，看上去一切正常。
+有了指纹，`21e0830c` 当场读出 `1 block(s) realigned`，与记录里 `content === stream` 对上。
+
+**教训**：流式修复的验收标准不是"我发出去的是对的"，而是"**落盘与渲染用的是我发出去的那份**"。
+凡是有第二个字段能覆盖第一个字段的协议，都得在两个字段上都验证；`content === stream`
+这一条断言现在写进了 `test/wire-test.mjs`。
+
 ## 7b. 仍然没证明的
 
 - `auto`（1.2.2）在真实会话里到底有没有按预期注入——需要一次「重启宿主 + 一个数学窗口
