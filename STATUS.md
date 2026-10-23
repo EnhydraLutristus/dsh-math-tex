@@ -1,6 +1,6 @@
 # dsh-math-tex — 当前状态（可交接）
 
-包名 `dsh-math-tex` 1.2.11。**仓库根目录就是包根目录**（checkout 在
+包名 `dsh-math-tex` 1.2.12。**仓库根目录就是包根目录**（checkout 在
 `default-workspace\dsh-math-tex\`，workspace 里现在只剩这一个项目，其余全在
 `default-workspace\_archive\`）。装到
 `%USERPROFILE%\.dsh\profiles\desktop\node_modules\dsh-math-tex\`，
@@ -23,7 +23,7 @@
 node tools/install.mjs                            # 复制 payload + 登记 bundle（幂等）
 node tools/install.mjs --dry-run                  # 只说会改什么
 node tools/install.mjs --uninstall dsh-math-tex   # 反安装（可指定别的包名）
-npm test                                          # 10 个测试文件，697 条断言
+npm test                                          # 10 个测试文件，705 条断言
 ```
 
 `tools/install.mjs` 里所有路径都由 `import.meta.url` 推出来，checkout 放在哪都能跑；
@@ -193,7 +193,7 @@ TLS 校验照样通过。`.tools\git.ps1` 就是这件事加三次重试。
 | `test/red-render-test.mjs` | 87 | 三类红（异常 / 无异常但带红 / 围栏内）都要被发现；回显从 HTML 与 message 两份账本里取，红渲染没有 message 时取画出来的 span |
 | `test/e2e-test.mjs` | 39 | 对**原始 KaTeX**逐个区域核对判定：修好的真不红，没修的仍然红 |
 | `test/regression-test.mjs` | 23 | 已经发生过的缺陷不许复发（用例逐字引自真实会话记录） |
-| `test/wire-test.mjs` | 107 | 真实 DSH 会话里的线上形状；流式输出等于"整段一次修复"；超过 `maxHold` 的块整段到达、冻结后不再修复 |
+| `test/wire-test.mjs` | 115 | 真实 DSH 会话里的线上形状；流式输出等于"整段一次修复"；`block-end` 带回的整块也必须是修好的那份；超过 `maxHold` 的块整段到达、冻结后不再修复 |
 | `test/fuzz-test.mjs` | 236 | 随机切分 + 随机损坏，不变量：任何切法都不留下红区 |
 | `test/config-test.mjs` | 36 | 选项解析与手写校验；**以及 loader 真正读的那个 `Config` 导出**；`full` 带引用规则与"只用一种定界符"的规则、`minimal` 都不带 |
 | `test/smoke-test.mjs` | 23 | 挂载、再导出、日志、提示词段已注册 |
@@ -201,7 +201,7 @@ TLS 校验照样通过。`.tools\git.ps1` 就是这件事加三次重试。
 | `tools/live-path-test.mjs` | 28 | **验收**：装好的副本 + profile 的真实配置 + 宿主的挂载路径，坏答案真的变成干净文本 |
 | `test/katex.mjs` | — | oracle 自检：bundle 存在、hash 对、版本对 |
 
-合计 **10 个文件、697 条断言**，`npm test` 约 4 秒，全程不需要网络。
+合计 **10 个文件、705 条断言**，`npm test` 约 4 秒，全程不需要网络。
 
 ## 5. 真实会话里的两次事故（都已被回归测试钉住）
 

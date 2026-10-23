@@ -12,8 +12,13 @@
  */
 
 import { createBlockState, guardStream, safeCut, TOKEN, BUILD } from '../lib/guard.js'
-import { repairText } from '../lib/tex-repair.js'
+import { repairText, loadOracle } from '../lib/tex-repair.js'
 import { readFileSync } from 'node:fs'
+
+// Without this the oracle is "unavailable", `inspect` accepts every region, and every repair
+// assertion below passes for the wrong reason: the guard does nothing and the expectation is
+// computed the same way. The suite must run with the renderer actually loaded.
+await loadOracle()
 
 let pass = 0
 let fail = 0
@@ -299,6 +304,70 @@ console.log('\n=== G. the real incident text ===')
     const again = repairText(want)
     check('incident repair leaves no rejected region', again.repairs.length === 0, `still repaired: ${again.repairs.length}`)
   }
+}
+
+console.log('\n=== H. the closing block-end carries the repaired text ===')
+{
+  // The host does not read the deltas: `BlockAssembler` stores `chunk.block` from `block-end`
+  // and `blocks()` returns it as the message content, so a repaired delta with an untouched
+  // block-end renders as the raw source. Measured 2026-10-23 (`session-badb5fcc`): the stream
+  // held `$x_{1_2}$` while `message.content` held `$x_1_2$` and the screen showed it in red.
+  async function runChunks(chunks) {
+    async function* source() {
+      for (const c of chunks) yield c
+    }
+    const out = []
+    for await (const c of guardStream(source(), { onLog: () => {} })) out.push(c)
+    return out
+  }
+
+  const CASE = '请把 $x_1_2$ 这个写法原样输出，然后解释它为什么会被 KaTeX 判成 Double subscript 错误。'
+  const deltas = chunkAt(CASE, indices(CASE))
+  const out = await runChunks([
+    { type: 'block-start', index: 0, blockType: 'text' },
+    ...deltas.map((text) => ({ type: 'text-delta', index: 0, text })),
+    { type: 'block-end', index: 0, block: { type: 'text', text: CASE } },
+    { type: 'finish', reason: 'stop' },
+  ])
+  const streamed = out.filter((c) => c.type === 'text-delta').map((c) => c.text).join('')
+  const block = out.find((c) => c.type === 'block-end')?.block?.text ?? ''
+  check('the block-end text is repaired, not the raw source', block === expected(CASE), `block=${JSON.stringify(block.slice(0, 60))}`)
+  check('the repair actually happened', block.includes('$x_{1_2}$') && !block.includes('$x_1_2$'), JSON.stringify(block.slice(0, 40)))
+  check('block-end equals the deltas the reader already saw', block === streamed, `len block=${block.length} streamed=${streamed.length}`)
+
+  // The shape from the second live test: a display block opened on a line of prose.
+  const GLUED = '即\n$$f\'(x_0)=\\lim_{\\Delta x\\to0}\\frac{f(x_0+\\Delta x)-f(x_0)}{\\Delta x}\n=\\tan\\alpha$$\n其中 $\\alpha$ 是倾斜角。'
+  const gluedOut = await runChunks([
+    { type: 'block-start', index: 0, blockType: 'text' },
+    ...chunkAt(GLUED, indices(GLUED)).map((text) => ({ type: 'text-delta', index: 0, text })),
+    { type: 'block-end', index: 0, block: { type: 'text', text: GLUED } },
+  ])
+  const gluedBlock = gluedOut.find((c) => c.type === 'block-end')?.block?.text ?? ''
+  check('a repaired display block reaches the record with its fences alone', gluedBlock.includes('即\n$$\n'), JSON.stringify(gluedBlock.slice(0, 20)))
+  check('the delivered display block is not the glued source', gluedBlock !== GLUED)
+
+  // Reasoning and tool blocks keep their own text: nothing renders them as markdown.
+  const other = await runChunks([
+    { type: 'block-start', index: 0, blockType: 'reasoning' },
+    { type: 'reasoning-delta', index: 0, text: 'thinking $x_1_2$' },
+    { type: 'block-end', index: 0, block: { type: 'reasoning', text: 'thinking $x_1_2$' } },
+    { type: 'block-start', index: 1, blockType: 'tool-call' },
+    { type: 'tool-call-delta', index: 1, id: 'call-1', name: 'noop', argumentsDelta: '{}' },
+    { type: 'block-end', index: 1, block: { type: 'tool-call', id: 'call-1', name: 'noop', arguments: '{}' } },
+  ])
+  const reasoning = other.find((c) => c.type === 'block-end' && c.block.type === 'reasoning')?.block?.text
+  const toolCall = other.find((c) => c.type === 'block-end' && c.block.type === 'tool-call')?.block
+  check('a reasoning block is passed through untouched', reasoning === 'thinking $x_1_2$', JSON.stringify(reasoning))
+  check('a tool-call block is passed through untouched', toolCall?.arguments === '{}' && toolCall?.name === 'noop', JSON.stringify(toolCall))
+
+  // An adapter that only sends a whole block (no deltas) must keep its text: the state never
+  // saw the raw text, so it has nothing to replace it with.
+  const whole = await runChunks([
+    { type: 'block-start', index: 0, blockType: 'text' },
+    { type: 'block-end', index: 0, block: { type: 'text', text: '$x_1_2$' } },
+  ])
+  const wholeText = whole.find((c) => c.type === 'block-end')?.block?.text
+  check('a block that never sent a delta keeps its text', wholeText === '$x_1_2$', JSON.stringify(wholeText))
 }
 
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed ===`)

@@ -2,6 +2,41 @@
 
 本文件记录每个版本的**可观察行为**变化。格式参考 Keep a Changelog，版本号遵循语义化版本。
 
+## [1.2.12] — 2026-10-23
+
+### 修复
+
+- **修复只到流、到不了屏幕：宿主的 `block-end` 带着原文，把修好的分片整个盖掉。**
+
+  两次实测（`session-badb5fcc`）里日志都写着 `repaired 1 region(s) so far`，重放也证明
+  流式输出是修好的，但屏幕上仍是红字：第一条显示 `x_1_2` 报 Double subscript，第二条把
+  `即\n$$f'(x_0)=…` 吞成一个红色公式。逐条读会话记录才看清：
+
+  | 记录里的位置 | 内容 |
+  | --- | --- |
+  | `assistant/message.stream`（分片） | `$x_{1_2}$`（修好） |
+  | `assistant/message.message.content[].text` | `$x_1_2$`（原文，屏幕渲染的就是它） |
+
+  原因是宿主的 `BlockAssembler`：`text-delta` 只是累加到 `partial.text`，而 `block-end`
+  的 `partial.block = chunk.block` 之后，`assemble()` 里 `if (partial.block) return partial.block`
+  **优先返回 `block-end` 自带的整块文本**。适配器在流末尾总会补一个 `block-end`，里面是
+  模型给的完整原文——于是修好的分片只活在实时视图里，消息正文、下一轮请求和重新渲染全都
+  回到原文。
+
+  修法：`guardStream` 处理 `block-end` 时，若该块是 text 且守卫已经收到过它的分片，就把
+  `chunk.block.text` 换成守卫已交付的整段文本（新增 `createBlockState().text` 取值器），
+  其余字段（`type`、索引、`usage`、`finish`、reasoning 与 tool-call 块）**一律不动**；
+  只收到 `block-end` 没有分片的块（适配器只发整块）保持原样，不会被清空。
+
+### 验证
+
+- 新增断言：`wire-test` 8 条（`block-end` 文本等于修好的整段、等于已发出的分片、显示块的
+  围栏回归规范形、reasoning/tool-call 块逐字节不变、无分片的块保留原文）。
+- `test/wire-test.mjs` 补上 `await loadOracle()`：这个文件此前没加载渲染器，`inspect` 对
+  任何区域都返回 ok，"流式等于整段修复"这类断言等于在拿"不修"和"不修"比——和 1.2.10 修过的
+  `installed-test` 是同一类空转。
+- 全套 `npm test`：10 个文件、**705** 条断言（106 + 87 + 39 + 23 + 115 + 236 + 36 + 23 + 12 + 28）。
+
 ## [1.2.11] — 2026-10-18
 
 ### 修复
